@@ -70,7 +70,9 @@ jobs:
       uses: actions/upload-artifact@main
       with:
         name: plugins-${{ env.build_tag }}
-        path: ${{ env.zip_glob_path }}/${{ env.zip_glob }} ${{ github.workspace }}/LICENSE
+        path: |
+          ${{ github.workspace }}/${{ env.zip_glob_path }}/${{ env.zip_glob }}
+          ${{ github.workspace }}/LICENSE
 
     - name: Release
       if: github.event_name != 'pull_request'
