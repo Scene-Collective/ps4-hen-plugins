@@ -23,8 +23,9 @@ jobs:
   build_prx:
     runs-on: ubuntu-latest
     env:
-      zip: plugins.zip
-      zip_glob: bin/plugins/prx_final/*.prx
+      zip: '${{ github.workspace }}/plugins.zip'
+      zip_glob_path: 'bin/plugins/prx_final'
+      zip_glob: '*.prx'
     steps:
 
     - name: Checkout
@@ -60,6 +61,7 @@ jobs:
         make -C plugin_server
 
     - name: Zip
+      working-directory: ${{ env.zip_glob_path }}
       run: zip ${{ env.zip }} ${{ env.zip_glob }}
 
     - name: Upload plugins
@@ -67,7 +69,7 @@ jobs:
       uses: actions/upload-artifact@main
       with:
         name: ${{ env.zip }}
-        path: ${{ env.zip_glob }}
+        path: ${{ env.zip_glob_path }}/${{ env.zip_glob }}
 
     - name: Release
       if: github.event_name != 'pull_request'
