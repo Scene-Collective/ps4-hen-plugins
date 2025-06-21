@@ -26,6 +26,7 @@ jobs:
       zip: '${{ github.workspace }}/plugins.zip'
       zip_glob_path: 'bin/plugins/prx_final'
       zip_glob: '*.prx'
+      build_tag: b${{ github.run_number }}
     steps:
 
     - name: Checkout
@@ -65,14 +66,14 @@ jobs:
       run: 7z a ${{ env.zip }} ${{ env.zip_glob }} ${{ github.workspace }}/LICENSE
 
     - name: Upload plugins
-      if: github.event_name != 'push'
+      #if: github.event_name != 'push'
       uses: actions/upload-artifact@main
       with:
-        name: ${{ env.zip }}
+        name: plugins-${{ env.build_tag }}
         path: ${{ env.zip_glob_path }}/${{ env.zip_glob }} ${{ github.workspace }}/LICENSE
 
     - name: Release
       if: github.event_name != 'pull_request'
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: gh release create b${{ github.run_number }} ${{ env.zip }} --target ${{ github.sha }} -t "Build ${{ github.run_number }}" -p
+      run: gh release create ${{ env.build_tag }} ${{ env.zip }} --target ${{ github.sha }} -t "Build ${{ env.build_tag }}" -p
