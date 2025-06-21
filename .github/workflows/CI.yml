@@ -62,7 +62,7 @@ jobs:
 
     - name: Zip
       working-directory: ${{ env.zip_glob_path }}
-      run: zip ${{ env.zip }} ${{ env.zip_glob }} ${{ github.workspace }}/LICENSE
+      run: 7z a ${{ env.zip }} ${{ env.zip_glob }} ${{ github.workspace }}/LICENSE
 
     - name: Upload plugins
       if: github.event_name != 'push'
