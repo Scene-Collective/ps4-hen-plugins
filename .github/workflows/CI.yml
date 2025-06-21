@@ -66,7 +66,7 @@ jobs:
       run: 7z a ${{ env.zip }} ${{ env.zip_glob }} ${{ github.workspace }}/LICENSE
 
     - name: Upload plugins
-      #if: github.event_name != 'push'
+      if: github.event_name != 'push'
       uses: actions/upload-artifact@main
       with:
         name: plugins-${{ env.build_tag }}
