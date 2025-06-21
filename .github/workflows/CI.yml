@@ -62,14 +62,14 @@ jobs:
 
     - name: Zip
       working-directory: ${{ env.zip_glob_path }}
-      run: zip ${{ env.zip }} ${{ env.zip_glob }} LICENSE
+      run: zip ${{ env.zip }} ${{ env.zip_glob }} ${{ github.workspace }}/LICENSE
 
     - name: Upload plugins
       if: github.event_name != 'push'
       uses: actions/upload-artifact@main
       with:
         name: ${{ env.zip }}
-        path: ${{ env.zip_glob_path }}/${{ env.zip_glob }} LICENSE
+        path: ${{ env.zip_glob_path }}/${{ env.zip_glob }} ${{ github.workspace }}/LICENSE
 
     - name: Release
       if: github.event_name != 'pull_request'
