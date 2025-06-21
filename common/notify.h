@@ -22,6 +22,13 @@ static void Notify(const char* IconUri, const char* FMT, ...)
     Buffer.unk3 = 0;
     Buffer.useIconImageUri = 1;
     Buffer.targetId = -1;
-    memcpy(Buffer.iconUri, IconUri, sizeof(Buffer.iconUri));
+    if (IconUri && *IconUri)
+    {
+        memcpy(Buffer.iconUri, IconUri, sizeof(Buffer.iconUri));
+    }
+    else
+    {
+        memcpy(Buffer.iconUri, TEX_ICON_SYSTEM, sizeof(TEX_ICON_SYSTEM));
+    }
     sceKernelSendNotificationRequest(0, &Buffer, sizeof(Buffer), 0);
 }
