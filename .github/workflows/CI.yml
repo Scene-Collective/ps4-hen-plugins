@@ -23,7 +23,7 @@ jobs:
   build_prx:
     runs-on: ubuntu-latest
     env:
-      zip: plugins.zip
+      zip: '${{ github.workspace }}/plugins.zip'
       zip_glob_path: 'bin/plugins/prx_final'
       zip_glob: '*.prx'
     steps:
