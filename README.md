@@ -5,7 +5,8 @@ Plugin system for Updated PS4 Homebrew Enabler [ps4-hen-vtx](https://github.com/
 # Plugins
 
 - `plugin_example`
-  - Demonstrate usage of CXX in module. Based from OpenOrbis [`library_example`](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/63c0be5ffff09fbaebebc6b9a738d150e2da0205/samples/library_example/library_example/lib.cpp)
+  - Demonstrate usage of CXX in module.
+  - Based from OpenOrbis [`library_example`](https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/blob/63c0be5ffff09fbaebebc6b9a738d150e2da0205/samples/library_example/library_example/lib.cpp)
 - `plugin_server`
   - Starts klog on port 3232 (assuming process has access to `/dev/klog`, i.e `ScePartyDaemonMain`)
   - Based on [klogsrv](https://github.com/ps5-payload-dev/klogsrv)
