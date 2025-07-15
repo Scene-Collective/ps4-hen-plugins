@@ -13,6 +13,8 @@ Plugin system for Updated PS4 Homebrew Enabler [ps4-hen](https://github.com/Scen
     - Install Package from USB Storage
   - Plugins Loader
     - Plugins will be loaded on game (BigApp) launch.
+    - Manual adjust by config file in `/data/hen/plugins.ini`
+    - Supports `all` for all apps or by individual TitleID (Not supported yet in UI).
   - Plugins Manager
     - Manages plugins installed under `/data/hen/plugins`.
     - Currently only supports enabling from `all` section for now.
