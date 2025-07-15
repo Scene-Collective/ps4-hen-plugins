@@ -11,6 +11,11 @@ Plugin system for Updated PS4 Homebrew Enabler [ps4-hen](https://github.com/Scen
     - Show path to package files
     - **New!** Install Packages from Hard Disk (`/data/pkg`)
     - Install Package from USB Storage
+  - Plugins Loader
+    - Plugins will be loaded on game (BigApp) launch.
+  - Plugins Manager
+    - Manages plugins installed under `/data/hen/plugins`.
+    - Currently only supports enabling from `all` section for now.
   - Adjust HEN Payload settings.
   - Based from [Orbis-Toolbox](https://github.com/OSM-Made/Orbis-Toolbox) and research by [OSM-Made](https://github.com/OSM-Made)
 ### `plugin_example`
