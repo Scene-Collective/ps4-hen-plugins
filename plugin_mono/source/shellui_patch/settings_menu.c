@@ -125,7 +125,9 @@ static int psn_toggle_on(INIFile* ini, const char* key)
 // running, grep for ELEMTYPE, and replace this value with the logged number.
 // 5 is the observed value on FW 9.00/11.00 HEN — LogUnknownElementType()
 // will report the correct one if it differs on this FW.
-#define TEXTINPUT_ELEMENT_TYPE_VALUE (5)
+// Reverted to -1 (disabled) — untested code path, safety measure for boot stability.
+// Re-enable to 5 once text_input round-trip is verified on target FW.
+#define TEXTINPUT_ELEMENT_TYPE_VALUE (-1)
 
 typedef enum
 {
@@ -2450,23 +2452,30 @@ void UploadOnBranch(void* app_exe)
     }
 
     // ── Name Changer: hook sceUserServiceGetUserName ────────────────────────
+    // Only install the hook if username.txt exists — avoids hitting disk on every
+    // GetUserName call when no custom name is configured, and avoids a risky
+    // hook during early boot when no one asked for name changing.
     {
-        void* fn_addr = NULL;
-        sceKernelDlsym(0x2001, "sceUserServiceGetUserName", &fn_addr);
-        if (!fn_addr)
+        char probe[4] = {0};
+        if (read_file(BASE_PATH "/username.txt", probe, sizeof(probe) - 1) == 0 && probe[0])
         {
-            // try loading the module
-            int h = sceKernelLoadStartModule("libSceUserService.sprx", 0, 0, 0, 0, 0);
-            if (h > 0)
-                sceKernelDlsym(h, "sceUserServiceGetUserName", &fn_addr);
-        }
-        if (fn_addr)
-        {
-            const uintptr_t pHook = CreatePrologueHook((uintptr_t)fn_addr, 15);
-            if (pHook)
+            void* fn_addr = NULL;
+            sceKernelDlsym(0x2001, "sceUserServiceGetUserName", &fn_addr);
+            if (!fn_addr)
             {
-                sceUserServiceGetUserName_original = (sceUserServiceGetUserName_t)pHook;
-                WriteJump64((uintptr_t)fn_addr, (uintptr_t)HookedGetUserName);
+                // try loading the module
+                int h = sceKernelLoadStartModule("libSceUserService.sprx", 0, 0, 0, 0, 0);
+                if (h > 0)
+                    sceKernelDlsym(h, "sceUserServiceGetUserName", &fn_addr);
+            }
+            if (fn_addr)
+            {
+                const uintptr_t pHook = CreatePrologueHook((uintptr_t)fn_addr, 15);
+                if (pHook)
+                {
+                    sceUserServiceGetUserName_original = (sceUserServiceGetUserName_t)pHook;
+                    WriteJump64((uintptr_t)fn_addr, (uintptr_t)HookedGetUserName);
+                }
             }
         }
     }
@@ -2513,7 +2522,9 @@ static void FinishBootEffect(void* _this)
     if (!once)
     {
         PrintTimeTick();
-        ApplyPSNBypassPatches();
+        // ApplyPSNBypassPatches removed — findProcess("SceShellCore") infinite-loops
+        // if the process isn't up yet, hanging SceShellUI and causing CE-36329-3 boot loop.
+        // PSN patches are applied on button press only (btn_psn_apply handler).
         Notify("", "Loaded.\n");
         once = true;
     }
