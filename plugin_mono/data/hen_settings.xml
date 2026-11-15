@@ -1,40 +1,849 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<system_settings version="1.0" plugin="settings_root_plugin">
-  <setting_list id="id_hen_settings" title="★ HEN Settings" initial_focus_to="id_game_package_installer_hdd">
-    <setting_list id="payload_options" title="★ Payload Options (Restart Required)" initial_focus_to="settings_exploit_fixes">
-      <!-- The IDs must match ini keys! -->
-      <toggle_switch id="exploit_fixes" title="Enable exploit fixes" description="Attempts to repatch bad/missing patches that should have been made by the exploit.&#xa;This helps ensure system stability after the initial jailbreak process." value="0"/>
-      <toggle_switch id="mmap_patches" title="Enable memory mapping patches" description="Enable memory mapping patches for decrypting binary files.&#xa;These patches allow the system to properly handle encrypted executables and libraries." value="0"/>
-      <toggle_switch id="block_updates" title="Block firmware updates" description="Block console firmware updates by unmounting the `/update` partition.&#xa;This prevents accidental firmware updates that could patch the exploits." value="0" confirm="Are you sure you want to disable this setting? Disabling might lead to accidental updates." confirm_phrase="Yes,No" />
-      <toggle_switch id="disable_aslr" title="Disable userland ASLR" description="Disable userland ASLR (Address Space Layout Randomization).&#xa;Disabling it can improve compatibility with homebrew applications, debuggers, and cheats." value="0"/>
-      <toggle_switch id="nobd_patches" title="Enable NoBD patches" description="NoBD (No Blu-ray Drive) patches - allows system updates without a working Blu-ray drive." value="0"/>
-    <list id="target_id" title="Target ID spoofer" description="Changes the console's reported Target ID for development or region-specific functionality.">
-      <list_item id="target_id_0x00" title="None" value="0"/>
-      <list_item id="target_id_0x80" title="Diagnostic" value="0x80"/>
-      <list_item id="target_id_0x81" title="Devkit" value="0x81"/>
-      <list_item id="target_id_0x82" title="Testkit" value="0x82"/>
-      <list_item id="target_id_0x83" title="Japan" value="0x83"/>
-      <list_item id="target_id_0x84" title="USA" value="0x84"/>
-      <list_item id="target_id_0x85" title="Europe" value="0x85"/>
-      <list_item id="target_id_0x86" title="Korea" value="0x86"/>
-      <list_item id="target_id_0x87" title="United Kingdom" value="0x87"/>
-      <list_item id="target_id_0x88" title="Mexico" value="0x88"/>
-      <list_item id="target_id_0x89" title="Australia &amp; New Zealand" value="0x89"/>
-      <list_item id="target_id_0x8A" title="South Asia" value="0x8A"/>
-      <list_item id="target_id_0x8B" title="Taiwan" value="0x8B"/>
-      <list_item id="target_id_0x8C" title="Russia" value="0x8C"/>
-      <list_item id="target_id_0x8D" title="China" value="0x8D"/>
-      <list_item id="target_id_0x8E" title="Hong Kong" value="0x8E"/>
-      <list_item id="target_id_0x8F" title="Brazil" value="0x8F"/>
-      <list_item id="target_id_0xA0" title="Kratos (Arcade Cabinet)" value="0xA0"/>
-    </list>
-      <toggle_switch id="skip_patches" title="Skip userland patches" description="Skip applying SceShellCore, SceShellUI, and RemotePlay patches.&#xa;Useful for testkit users." value="0" confirm="Are you sure you want to enable this? Enabling this will not allow homebrew apps to launch." confirm_phrase="Yes,No"/>
-      <toggle_switch id="upload_prx" title="Write HEN plugin files to HDD" description="Write the default HEN plugin PRX files to the console's hard drive.&#xa;Enabling this is recommended for first-time setup." value="0"/>
-      <toggle_switch id="enable_plugins" title="Enable plugin system" description="Enable HEN plugin file loading and execution system.&#xa;This feature activates the plugin subsystem that allows loading of additional PRX modules to extend HEN's capabilities.&#xa;Such as this extended settings menu."  confirm="Are you sure you want to disable this setting? Disabling this will not allow the following features:&#xa;★ HEN Settings Menu&#xa;FTP Server&#xa;Kernel Log Server&#xa;Plugins load for apps" confirm_phrase="Yes,No" value="0"/>
-    </setting_list>
-    <link id="id_plugin_manager" title="Plugin Manager" description="Manages plugins installed under `/data/hen/plugins`.&#xa;Plugins will be loaded on game (BigApp) launch.&#xa;Currently only supports enabling from `all` section for now." file="HEN/data/PluginManager.xml" />
-    <link id="id_game_package_installer_hdd" title="Install Package from Hard Disk" description="Place package files into /data/pkg.&#xa;Recursive path not supported." file="PkgInstaller/data/pkginstaller_hdd.xml" />
-    <link id="id_game_package_installer_usb" title="Install Package from USB Storage" description="Place package files into root of USB Storage.&#xa;Recursive path not supported." file="PkgInstaller/data/pkginstaller_usb.xml" />
-    <button id="id_restart_shellui" title="Restart ShellUI" description="Restarts ShellUI."/>
-  </setting_list>
+<!--
+PhantomHEN Settings — expanded settings tree for settings_root_plugin
+Element set is restricted to what the ShellUI settings plugin parses:
+setting_list / toggle_switch / list+list_item / text_input / link / button
+Rules this file obeys (break them and Settings blank-screens):
+
+every id is unique across the whole file
+every initial_focus_to points at an id inside its own setting_list
+all raw & are escaped as & --> <system_settings version="1.0" plugin="settings_root_plugin"> <setting_list id="id_hen_settings" title="★ PhantomHEN Settings" initial_focus_to="jailbreak_mods_link">
+<link id="jailbreak_mods_link" title="★ Jailbreak Mods"
+description="Overpowered permanent jailbreak toggles — debug menu, QA flag, region free, fan control, boost mode, save resign, and more."
+file="jailbreak_mods.xml"/>
+<link id="ui_tweaks_link" title="★ UI Tweaks"
+description="Font size, text color, display name override, shell tweaks, and overlay options."
+file="ui_tweaks.xml"/>
+<link id="psn_bypass_link" title="★ PSN Bypass"
+description="PS Plus bypass, sign-in bypass, offline mode, IDPS spoof, and ban prevention toggles."
+file="psn_bypass.xml"/>
+<!-- ═══════════════════════════════════════════════
+PROFILES & QUICK SETUP
+═══════════════════════════════════════════════ -->
+<setting_list id="profiles_quick" title="★ Profiles &amp; Quick Setup" initial_focus_to="active_profile">
+<list id="active_profile" title="Active profile"
+description="Applies a whole preset of options at once. Switch to Custom to stop a profile overwriting your manual toggles.">
+<list_item id="prof_custom" title="Custom (manual)" value="0"/>
+<list_item id="prof_minimal" title="Minimal (stability)" value="1"/>
+<list_item id="prof_offline" title="Offline gaming" value="2"/>
+<list_item id="prof_dev" title="Development / RE" value="3"/>
+<list_item id="prof_trainer" title="Trainer / cheat work" value="4"/>
+<list_item id="prof_media" title="Media &amp; homebrew" value="5"/>
+</list>
+<toggle_switch id="profile_apply_on_boot" title="Apply profile on every boot"
+description="Re-applies the active profile at payload load. Leave off if you tune options by hand between boots."
+value="1"/>
+<toggle_switch id="config_autosave" title="Auto-save config on exit"
+description="Writes the current settings to /data/hen/config.ini when you leave this menu."
+value="1"/>
+<button id="btn_config_save" title="[ SAVE CONFIG NOW ]"
+description="Writes current settings to /data/hen/config.ini immediately."/>
+<button id="btn_config_export" title="[ EXPORT CONFIG TO USB ]"
+description="Copies config.ini to the root of the first connected USB drive."/>
+<button id="btn_config_import" title="[ IMPORT CONFIG FROM USB ]"
+description="Loads config.ini from USB and overwrites current settings."
+confirm="Import config from USB? All current settings will be replaced."
+confirm_phrase="Yes,No"/>
+<button id="btn_config_reset" title="[ RESET ALL TO DEFAULTS ]"
+description="Returns every option in this menu to its shipped default."
+confirm="Reset every PhantomHEN setting to defaults? This cannot be undone."
+confirm_phrase="Yes,No"/>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+PAYLOAD OPTIONS
+═══════════════════════════════════════════════ -->
+<setting_list id="payload_options" title="★ Payload Options" initial_focus_to="patch_set">
+<list id="patch_set" title="Patch set"
+description="How much of the kernel patch set the payload applies. Full enables everything below; Custom honours the individual toggles.">
+<list_item id="patch_minimal" title="Minimal (boot-safe)" value="0"/>
+<list_item id="patch_standard" title="Standard (default)" value="1"/>
+<list_item id="patch_full" title="Full (all patches)" value="2"/>
+<list_item id="patch_custom" title="Custom (toggles below)" value="3"/>
+</list>
+<toggle_switch id="exploit_fixes" title="Enable exploit fixes"
+description="Re-applies patches missed during the initial jailbreak. Improves system stability post-exploit."
+value="1"/>
+<toggle_switch id="mmap_patches" title="Memory mapping patches"
+description="Patches needed to decrypt and execute encrypted binaries and system libraries."
+value="1"/>
+<toggle_switch id="fself_enable" title="Allow unsigned ELF / fSELF"
+description="Accepts fake-signed executables. Required to run self-compiled homebrew and ported ELFs."
+value="1"/>
+<toggle_switch id="disable_aslr" title="Disable userland ASLR"
+description="Disables Address Space Layout Randomization. Static offsets stay valid across reboots — needed for offset-based tooling."
+value="0"/>
+<toggle_switch id="disable_kaslr_log" title="Report kernel base to log"
+description="Prints the resolved kernel base and ShellCore base to the kernel log at boot. Saves re-deriving them for every session."
+value="0"/>
+<toggle_switch id="cr0_wp_disable" title="Disable kernel write protection"
+description="Clears CR0.WP so patches can be written to read-only kernel pages. Leave on unless a patch is crashing at apply time."
+value="1"/>
+<toggle_switch id="syscall_unrestrict" title="Unrestrict syscalls"
+description="Removes the userland syscall whitelist. Homebrew can call kernel syscalls directly instead of going through libkernel stubs."
+value="0"/>
+<toggle_switch id="mount_system_rw" title="Mount system partitions read/write"
+description="Remounts /system and /system_ex as writable. Needed to replace system files; a bad write here can stop the console booting."
+value="0"
+confirm="Mount system partitions read/write? A bad write to /system can prevent the console from booting."
+confirm_phrase="Yes,No"/>
+<toggle_switch id="sys_debug_menu" title="Unlock Sony debug settings"
+description="Exposes the hidden system Debug Settings entry in the main Settings list."
+value="0"/>
+<toggle_switch id="block_updates" title="Block firmware updates"
+description="Unmounts the /update partition to prevent accidental OFW updates."
+value="1"
+confirm="Disable update blocking? The console may download and install a firmware update automatically."
+confirm_phrase="Yes,No"/>
+<toggle_switch id="nobd_patches" title="NoBD patches"
+description="Allows system functions to operate without a working Blu-ray drive."
+value="0"/>
+<toggle_switch id="skip_patches" title="Skip userland patches"
+description="Skips SceShellCore, SceShellUI, and RemotePlay patches. For testkit users only."
+value="0"
+confirm="Skip userland patches? Homebrew apps will not launch with this enabled."
+confirm_phrase="Yes,No"/>
+<toggle_switch id="shellcore_watchdog" title="Re-patch ShellCore on respawn"
+description="Watches for SceShellCore restarting and re-applies its patches automatically. Stops homebrew silently breaking mid-session."
+value="1"/>
+<toggle_switch id="uart_enable" title="Enable UART debug output"
+description="Routes kernel debug output to the UART serial port. Useful with a UART cable for low-level crash analysis and boot logging."
+value="0"/>
+<toggle_switch id="verbose_boot" title="Verbose boot log"
+description="Displays detailed HEN initialization output on the screen during boot. Useful for diagnosing patch failures."
+value="0"/>
+<toggle_switch id="patch_report" title="Show patch result summary"
+description="Prints an applied/failed count per patch group once initialization finishes."
+value="1"/>
+<list id="target_id" title="Target ID spoofer"
+description="Overrides the console's reported Target ID. Devkit (0x81) or Testkit (0x82) gives widest homebrew compatibility.">
+<list_item id="target_id_0x00" title="None (Retail)" value="0x00"/>
+<list_item id="target_id_0x80" title="Diagnostic" value="0x80"/>
+<list_item id="target_id_0x81" title="Devkit" value="0x81"/>
+<list_item id="target_id_0x82" title="Testkit" value="0x82"/>
+<list_item id="target_id_0x83" title="Japan" value="0x83"/>
+<list_item id="target_id_0x84" title="USA" value="0x84"/>
+<list_item id="target_id_0x85" title="Europe" value="0x85"/>
+<list_item id="target_id_0x86" title="Korea" value="0x86"/>
+<list_item id="target_id_0x87" title="United Kingdom" value="0x87"/>
+<list_item id="target_id_0x88" title="Mexico" value="0x88"/>
+<list_item id="target_id_0x89" title="Australia &amp; New Zealand" value="0x89"/>
+<list_item id="target_id_0x8A" title="South Asia" value="0x8A"/>
+<list_item id="target_id_0x8B" title="Taiwan" value="0x8B"/>
+<list_item id="target_id_0x8C" title="Russia" value="0x8C"/>
+<list_item id="target_id_0x8D" title="China" value="0x8D"/>
+<list_item id="target_id_0x8E" title="Hong Kong" value="0x8E"/>
+<list_item id="target_id_0x8F" title="Brazil" value="0x8F"/>
+<list_item id="target_id_0xA0" title="Kratos (Arcade)" value="0xA0"/>
+</list>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+BOOT & AUTOSTART
+═══════════════════════════════════════════════ -->
+<setting_list id="boot_autostart" title="★ Boot &amp; Autostart" initial_focus_to="payload_autorun">
+<toggle_switch id="payload_autorun" title="Auto-run payload on boot"
+description="Loads the HEN payload automatically once the exploit host has been reached. Off means you trigger it by hand each boot."
+value="1"/>
+<text_input id="exploit_host_url" title="Exploit host URL"
+description="Page the browser opens to re-run the exploit after a cold boot. Point this at your own local host."
+value="http://192.168.1.10/"
+max_length="64"/>
+<toggle_switch id="host_open_on_boot" title="Open host page on boot"
+description="Launches the browser at the URL above when the console reaches the home screen."
+value="0"/>
+<text_input id="payload_retry_count" title="Payload retry attempts"
+description="How many times to retry a failed exploit attempt before giving up. Range: 1-10."
+value="3"
+max_length="2"/>
+<list id="boot_target" title="After jailbreak, go to"
+description="Where the console lands once the payload has finished applying patches.">
+<list_item id="boot_home" title="Home screen" value="0"/>
+<list_item id="boot_last" title="Last used app" value="1"/>
+<list_item id="boot_title" title="Specific title ID" value="2"/>
+<list_item id="boot_hen" title="This settings menu" value="3"/>
+</list>
+<text_input id="boot_title_id" title="Autostart title ID"
+description="Title ID to launch when the option above is set to Specific title (e.g. CUSA00001)."
+value="CUSA00000"
+max_length="9"/>
+<text_input id="boot_delay_ms" title="Autostart delay (ms)"
+description="Wait before launching the autostart target. Give plugins time to load — 3000 is a safe floor."
+value="3000"
+max_length="5"/>
+<toggle_switch id="rest_mode_persist" title="Survive rest mode"
+description="Keeps patches and services alive across suspend/resume instead of requiring a fresh exploit."
+value="1"/>
+<toggle_switch id="boot_anim_skip" title="Skip Sony boot animation"
+description="Skips the PlayStation boot logo and animation. Reduces time from power-on to home screen."
+value="0"/>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+NETWORK & SERVICES
+═══════════════════════════════════════════════ -->
+<setting_list id="network_services" title="★ Network &amp; Services" initial_focus_to="services_autostart">
+<toggle_switch id="services_autostart" title="Start services on boot"
+description="Brings up every service enabled below as soon as the payload loads."
+value="1"/>
+<toggle_switch id="service_watchdog" title="Service auto-restart watchdog"
+description="Restarts a service that dies instead of leaving the port dead until the next reboot."
+value="1"/>
+<toggle_switch id="fake_primary" title="Fake Primary PS4"
+description="Spoofs primary console activation. Fixes NP-32045-5 'Cannot use this content' errors on PKG-installed games without requiring a PSN connection."
+value="1"/>
+<toggle_switch id="ftp_server" title="FTP Server"
+description="Starts an FTP server for file transfer. Most clients connect anonymously unless you set credentials below."
+value="1"/>
+<text_input id="ftp_port" title="FTP server port"
+description="Port the FTP server listens on. Default: 2121."
+value="2121"
+max_length="5"/>
+<text_input id="ftp_user" title="FTP username"
+description="Leave blank for anonymous access. Set a value if the console is on a shared network."
+value=""
+max_length="32"/>
+<text_input id="ftp_pass" title="FTP password"
+description="Only used when a username is set above."
+value=""
+max_length="32"/>
+<toggle_switch id="kernel_log" title="Kernel Log Server"
+description="Streams kernel log output over the network. Useful for debugging plugin crashes and exploit issues."
+value="0"/>
+<text_input id="kernel_log_port" title="Kernel log port"
+description="Port the klog server listens on. Default: 3232."
+value="3232"
+max_length="5"/>
+<toggle_switch id="rpc_server" title="RPC Server"
+description="Starts a remote procedure call server. Allows PC-side tools to call PS4 kernel and userland functions directly. Required for cheat trainers, memory editors, and remote process control."
+value="1"/>
+<text_input id="rpc_server_port" title="RPC server port"
+description="Port the RPC server listens on."
+value="1337"
+max_length="5"/>
+<toggle_switch id="payload_listener" title="Payload / BIN loader"
+description="Listens for .bin payloads sent from a PC and executes them. Lets you push a new build without re-running the browser exploit."
+value="1"/>
+<text_input id="payload_listener_port" title="Payload loader port"
+description="Port the BIN loader listens on. Default: 9020."
+value="9020"
+max_length="5"/>
+<toggle_switch id="web_file_browser" title="Web file browser"
+description="Serves a browser-based file manager for the console's filesystem. Handy when no FTP client is available."
+value="0"/>
+<text_input id="web_file_port" title="Web file browser port"
+description="Port the web file browser listens on. Default: 8080."
+value="8080"
+max_length="5"/>
+<toggle_switch id="smb_mount_enable" title="Mount network share (SMB)"
+description="Mounts a PC network share so games and homebrew can read files directly off it."
+value="0"/>
+<text_input id="smb_share_path" title="SMB share path"
+description="Share to mount, e.g. //192.168.1.10/ps4."
+value="//192.168.1.10/ps4"
+max_length="64"/>
+<toggle_switch id="block_telemetry" title="Block Sony telemetry"
+description="Blocks outbound telemetry, analytics, and crash reporting to Sony servers."
+value="1"/>
+<toggle_switch id="block_psn_login" title="Block PSN auto-login"
+description="Prevents the console from automatically connecting to PSN on boot. Useful for staying offline without disabling the network entirely."
+value="1"/>
+<toggle_switch id="block_update_domains" title="Block update domains"
+description="Drops DNS lookups for Sony's firmware update hosts. Belt-and-braces alongside the update partition unmount."
+value="1"/>
+<toggle_switch id="remote_play_bypass" title="Remote Play without PSN"
+description="Bypasses the PSN sign-in requirement for Remote Play. Allows remote control over LAN without an active PSN account."
+value="0"/>
+<toggle_switch id="dns_override_enable" title="Global DNS override"
+description="Redirects all system DNS queries to a custom server. Covers every app and game — no per-title plugin needed."
+value="0"/>
+<text_input id="dns_override_ip" title="DNS server IP"
+description="IP address of your custom DNS server."
+value="192.168.1.1"
+max_length="15"/>
+<text_input id="dns_override_ip2" title="Secondary DNS IP"
+description="Fallback DNS server. Leave blank to use the primary only."
+value=""
+max_length="15"/>
+<toggle_switch id="mtu_override_enable" title="MTU override"
+description="Forces a custom MTU on the network interface. Lowering it can stabilise flaky wireless links."
+value="0"/>
+<text_input id="mtu_value" title="MTU value"
+description="Interface MTU. Range: 576-1500. Common fix value: 1473."
+value="1473"
+max_length="4"/>
+<toggle_switch id="ntp_override_enable" title="Custom NTP server"
+description="Sets a custom time server instead of Sony's NTP. Useful for LAN-isolated setups."
+value="0"/>
+<text_input id="ntp_override_host" title="NTP server hostname / IP"
+description="Hostname or IP of your NTP server."
+value="pool.ntp.org"
+max_length="64"/>
+<link id="net_status_link" title="Network Status"
+description="Shows the current IP, gateway, MTU, link speed, and which services are listening on which ports."
+file="HEN/data/NetStatus.xml"/>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+GAME & CONTENT
+═══════════════════════════════════════════════ -->
+<setting_list id="game_content" title="★ Game &amp; Content" initial_focus_to="fw_spoof_enable">
+<toggle_switch id="fw_spoof_enable" title="Firmware version spoofer"
+description="Reports a spoofed firmware version to games and apps. Lets you launch titles that require a minimum firmware higher than your actual version."
+value="1"/>
+<text_input id="fw_spoof_version" title="Spoof firmware version"
+description="Firmware version string to report (e.g. 11.00, 12.00). Only active when firmware spoofer is enabled."
+value="11.00"
+max_length="5"/>
+<toggle_switch id="game_ver_spoof_enable" title="Game version spoofer"
+description="Reports a spoofed application version. Useful for bypassing version checks on your own private server setups."
+value="0"/>
+<text_input id="game_ver_spoof_value" title="Spoof game version string"
+description="Version string to report to game servers (e.g. 1.26)."
+value="1.00"
+max_length="10"/>
+<toggle_switch id="region_free" title="Region-free disc playback"
+description="Disables disc and game region checks. Play physical discs and digital titles from any region."
+value="1"/>
+<toggle_switch id="debug_trophies" title="Trophy override"
+description="Forces all trophy unlocks to succeed locally and blocks sync to PSN. Trophies saved on-device only."
+value="0"/>
+<toggle_switch id="trophy_popup_hide" title="Hide trophy popups"
+description="Suppresses the on-screen trophy notification. Keeps recordings and screenshots clean."
+value="0"/>
+<toggle_switch id="save_unlocker" title="Save data unlocker"
+description="Removes save encryption and account binding. Allows FTP access to raw save files for backup, editing, and cross-region transfer."
+value="1"/>
+<toggle_switch id="screenshot_unlock" title="Force screenshot/video capture"
+description="Enables Share button screenshot and video recording in titles that explicitly block it."
+value="1"/>
+<toggle_switch id="debug_settings_unlock" title="Debug settings unlock"
+description="Unlocks hidden in-game debug menus where the game supports them. Exposes developer tools such as god mode, level select, noclip, and entity spawners."
+value="1"/>
+<toggle_switch id="force_offline_mode" title="Force game offline mode"
+description="Prevents games from connecting to any online service. Useful for running private server plugins without the game attempting live-server fallback."
+value="0"/>
+<toggle_switch id="disable_game_patches" title="Disable auto game patches"
+description="Prevents the system from downloading and applying game updates. Keeps the installed version locked — useful when a patch breaks a cheat or private server."
+value="1"/>
+<toggle_switch id="game_patch_loader" title="Game patch loader"
+description="Applies per-title memory patches from XML files at launch. This is the clean way to ship fixes and cheats per game."
+value="0"/>
+<text_input id="game_patch_dir" title="Game patch directory"
+description="Folder scanned for per-title patch XML files."
+value="/data/hen/patches/"
+max_length="64"/>
+<toggle_switch id="neo_mode_force" title="Force Neo (Pro) mode"
+description="Reports the console as a PS4 Pro so titles enable their Pro render path. Base hardware will run it slower — test per title."
+value="0"/>
+<toggle_switch id="disc_image_mount" title="Enable disc image mount"
+description="Allows mounting PS4 disc images (.iso / .pkg) directly from the hard drive without burning to disc."
+value="0"/>
+<link id="per_title_link" title="Per-Title Settings"
+description="Override any option in this menu for one specific title ID. Rules apply at game launch."
+file="HEN/data/PerTitle.xml"/>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+CHEAT & TRAINER SYSTEM
+═══════════════════════════════════════════════ -->
+<setting_list id="cheat_system" title="★ Cheat &amp; Trainer System" initial_focus_to="cheat_engine_enable">
+<toggle_switch id="cheat_engine_enable" title="Enable cheat engine"
+description="Activates the in-memory cheat engine. Required for trainer plugins and real-time memory patching via the RPC server or hotkey triggers."
+value="1"/>
+<toggle_switch id="ptrace_unrestrict" title="Unrestrict ptrace"
+description="Removes ptrace permission checks. Allows any process to attach to and read/write any other process memory — required for external trainers and memory scanners."
+value="1"/>
+<toggle_switch id="krw_userland_api" title="Kernel R/W userland API"
+description="Exposes a userland-accessible kernel memory read/write API. Allows homebrew tools to perform kernel-level memory operations without loading a kernel module."
+value="1"/>
+<toggle_switch id="mem_scanner_service" title="Memory scanner service"
+description="Runs a scan server so PC-side tools can do value scans and narrowing passes without streaming the whole address space."
+value="0"/>
+<list id="scanner_alignment" title="Scanner alignment"
+description="Address stride the scanner steps by. 4 bytes is right for most int/float searches.">
+<list_item id="align_1" title="1 byte (slow, exhaustive)" value="1"/>
+<list_item id="align_2" title="2 bytes" value="2"/>
+<list_item id="align_4" title="4 bytes (default)" value="4"/>
+<list_item id="align_8" title="8 bytes (pointers)" value="8"/>
+</list>
+<toggle_switch id="cheat_autoload" title="Auto-load table for running title"
+description="Looks for a cheat table matching the launched title ID and loads it automatically."
+value="1"/>
+<text_input id="cheat_table_dir" title="Cheat table directory"
+description="Folder scanned for cheat tables, one file per title ID."
+value="/data/hen/cheats/"
+max_length="64"/>
+<list id="cheat_table_format" title="Cheat table format"
+description="Parser used for files in the directory above.">
+<list_item id="fmt_json" title="JSON (default)" value="0"/>
+<list_item id="fmt_xml" title="XML" value="1"/>
+<list_item id="fmt_legacy" title="Legacy .txt pairs" value="2"/>
+</list>
+<list id="poke_tick_rate" title="Freeze / poke tick rate"
+description="How often frozen values are re-written. Faster catches aggressive game-side writes but costs CPU.">
+<list_item id="tick_1000" title="1 Hz (light)" value="1000"/>
+<list_item id="tick_250" title="4 Hz" value="250"/>
+<list_item id="tick_100" title="10 Hz (default)" value="100"/>
+<list_item id="tick_16" title="60 Hz (aggressive)" value="16"/>
+</list>
+<toggle_switch id="trainer_hotkeys" title="Trainer hotkey system"
+description="Enables controller shortcut binding for cheat toggles. Configure bindings in the Plugin Manager."
+value="1"/>
+<list id="trainer_hotkey_combo" title="Trainer menu hotkey"
+description="Controller combination that opens the trainer overlay while in-game.">
+<list_item id="hk_l3r3" title="L3 + R3" value="0"/>
+<list_item id="hk_l1r1start" title="L1 + R1 + Start" value="1"/>
+<list_item id="hk_touchpad" title="Touchpad (hold 2s)" value="2"/>
+<list_item id="hk_l2r2options" title="L2 + R2 + Options" value="3"/>
+</list>
+<list id="trainer_overlay_pos" title="Trainer overlay position"
+description="Where the trainer overlay draws on screen.">
+<list_item id="ovl_tl" title="Top left" value="0"/>
+<list_item id="ovl_tr" title="Top right" value="1"/>
+<list_item id="ovl_bl" title="Bottom left" value="2"/>
+<list_item id="ovl_br" title="Bottom right" value="3"/>
+<list_item id="ovl_c" title="Centre" value="4"/>
+</list>
+<toggle_switch id="cheat_offline_only" title="Disable cheats when online"
+description="Unloads the cheat engine if the title opens a connection to a live service. Keeps cheat work to offline and private-server sessions."
+value="1"/>
+<toggle_switch id="cheat_log_writes" title="Log every cheat write"
+description="Records address, old value, and new value for each poke. Invaluable when a cheat crashes the game and you need the last write."
+value="0"/>
+<link id="cheat_manager_link" title="Cheat Manager"
+description="Browse loaded tables, toggle individual cheats, and bind them to hotkeys."
+file="HEN/data/CheatManager.xml"/>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+SAVE MANAGER
+═══════════════════════════════════════════════ -->
+<setting_list id="save_manager" title="★ Save Manager" initial_focus_to="save_backup_link">
+<toggle_switch id="save_resign_enable" title="Enable save resigning"
+description="Automatically resigns save data to match the current console's account ID when copying saves from another console or account."
+value="1"/>
+<text_input id="save_account_id" title="Target account ID"
+description="16-hex-digit account ID saves are resigned to. Blank uses the currently signed-in user."
+value=""
+max_length="16"/>
+<toggle_switch id="save_keystone_fix" title="Rebuild keystone on resign"
+description="Regenerates the save's keystone file after resigning. Fixes 'corrupted data' prompts on imported saves."
+value="1"/>
+<toggle_switch id="save_cross_region" title="Cross-region save compatibility"
+description="Strips region locks from save data. Allows US saves to load on EU versions and vice versa."
+value="1"/>
+<toggle_switch id="save_auto_decrypt" title="Auto-decrypt on mount"
+description="Decrypts save data as it is mounted so raw files are readable over FTP without a manual unlock step."
+value="1"/>
+<toggle_switch id="save_auto_backup" title="Auto-backup saves to USB"
+description="Automatically copies save data to a connected USB drive after each game session ends."
+value="0"/>
+<list id="save_backup_dest" title="Backup destination"
+description="Where automatic backups are written.">
+<list_item id="dest_usb" title="USB storage" value="0"/>
+<list_item id="dest_hdd" title="Internal HDD" value="1"/>
+<list_item id="dest_smb" title="Network share" value="2"/>
+</list>
+<list id="save_backup_compress" title="Backup compression"
+description="Compression applied to backup archives.">
+<list_item id="cmp_none" title="None (fastest)" value="0"/>
+<list_item id="cmp_zip" title="ZIP (default)" value="1"/>
+</list>
+<text_input id="save_backup_keep" title="Backups to keep per title"
+description="Older backups beyond this count are deleted. Range: 1-50."
+value="5"
+max_length="2"/>
+<link id="save_backup_link" title="Backup Saves to USB"
+description="Manually back up all saves to /PS4/SAVEDATA/ on USB storage."
+file="SaveManager/data/backup.xml"/>
+<link id="save_restore_link" title="Restore Saves from USB"
+description="Restore saves from /PS4/SAVEDATA/ on USB storage. Resigning is applied automatically if enabled above."
+file="SaveManager/data/restore.xml"/>
+<link id="save_browse_link" title="Browse Save Data"
+description="Lists every save on the console with title ID, size, owner account, and last-modified time."
+file="SaveManager/data/browse.xml"/>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+PERFORMANCE & HARDWARE
+═══════════════════════════════════════════════ -->
+<setting_list id="performance" title="★ Performance &amp; Hardware" initial_focus_to="overclock_enable">
+<toggle_switch id="overclock_enable" title="CPU / GPU boost mode"
+description="Applies PS4 Pro-equivalent clock patches. Increases CPU from 1.6 GHz to 2.13 GHz and GPU from 800 MHz to 911 MHz. Restart required. Increases heat — ensure ventilation is adequate."
+value="0"
+confirm="Enable boost mode? This raises CPU and GPU clocks above stock. Ensure the console has adequate cooling."
+confirm_phrase="Yes,No"/>
+<list id="clock_profile" title="Clock profile"
+description="Preset clock targets used when boost mode is on. Stock is always safe; Aggressive needs real cooling.">
+<list_item id="clk_stock" title="Stock (1.6 GHz / 800 MHz)" value="0"/>
+<list_item id="clk_mild" title="Mild (1.8 GHz / 850 MHz)" value="1"/>
+<list_item id="clk_pro" title="Pro parity (2.13 GHz / 911 MHz)" value="2"/>
+<list_item id="clk_max" title="Aggressive (max stable)" value="3"/>
+</list>
+<toggle_switch id="thermal_throttle_disable" title="Disable thermal throttling"
+description="Prevents the system from downclocking under high thermal load. Maintains full clock speeds at the cost of higher temperatures. Use only with active cooling improvements."
+value="0"
+confirm="Disable thermal throttling? This can cause hardware damage if cooling is insufficient."
+confirm_phrase="Yes,No"/>
+<text_input id="thermal_safety_cap" title="Thermal safety cap (°C)"
+description="Hard ceiling that re-enables throttling even when throttling is disabled. Keep this set. Range: 60-95."
+value="85"
+max_length="2"/>
+<toggle_switch id="cpu_core_unlock" title="Unlock reserved CPU cores"
+description="Releases the cores the system reserves for itself so homebrew can use all eight. Can destabilise the shell under load."
+value="0"
+confirm="Unlock reserved CPU cores? The system shell may become unstable."
+confirm_phrase="Yes,No"/>
+<toggle_switch id="mem_reserve_unlock" title="Unlock reserved system RAM"
+description="Frees system-reserved memory for homebrew allocation. Useful for emulators and large dumps."
+value="0"/>
+<list id="fan_mode" title="Fan control mode"
+description="Controls how the system fan speed is managed.">
+<list_item id="fan_auto" title="Auto (default)" value="0"/>
+<list_item id="fan_silent" title="Silent (low RPM)" value="1"/>
+<list_item id="fan_turbo" title="Turbo (max RPM)" value="2"/>
+<list_item id="fan_manual" title="Manual (set % below)" value="3"/>
+<list_item id="fan_curve" title="Curve (offset below)" value="4"/>
+</list>
+<text_input id="fan_manual_pct" title="Manual fan speed (%)"
+description="Fan speed percentage when Fan control mode is set to Manual. Range: 30-100."
+value="60"
+max_length="3"/>
+<text_input id="fan_curve_offset" title="Fan curve offset (%)"
+description="Shifts the stock fan curve by this much when mode is set to Curve. Range: 0-40."
+value="15"
+max_length="2"/>
+<toggle_switch id="hdd_cache_boost" title="HDD read cache boost"
+description="Increases the kernel's HDD read-ahead buffer. Reduces load times on spinning drives. No effect on SSDs."
+value="1"/>
+<toggle_switch id="usb_uasp_enable" title="USB 3.0 UASP mode"
+description="Enables UASP for external drives that support it. Faster extended storage; disable if a drive drops out."
+value="0"/>
+<toggle_switch id="ext_storage_automount" title="Auto-mount extended storage"
+description="Mounts connected external drives at boot without going through the Settings storage menu."
+value="1"/>
+<toggle_switch id="temp_log_enable" title="Log temperatures to file"
+description="Writes CPU/GPU temperature samples to /data/hen/logs/thermal.csv. Use when tuning clocks or cooling."
+value="0"/>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+DEVELOPER TOOLS
+═══════════════════════════════════════════════ -->
+<setting_list id="dev_tools" title="★ Developer Tools" initial_focus_to="remote_debug_enable">
+<toggle_switch id="remote_debug_enable" title="Remote debugger (GDB)"
+description="Starts a GDB stub server. Attach from a PC with gdb-multiarch or any PS4 GDB client to live-debug any running process."
+value="0"/>
+<text_input id="remote_debug_port" title="GDB server port"
+description="Port the GDB stub listens on. Default: 2345."
+value="2345"
+max_length="5"/>
+<text_input id="hw_watchpoint_count" title="Hardware watchpoints"
+description="Debug registers reserved for watchpoints. x64 gives you four. Range: 0-4."
+value="4"
+max_length="1"/>
+<toggle_switch id="coredump_enable" title="Coredump on crash"
+description="Writes a full process coredump to /data/hen/coredumps/ on game crash. Use with the GDB stub for post-mortem analysis."
+value="0"/>
+<toggle_switch id="assert_on_crash" title="Assert on null crash"
+description="Halts execution and dumps a stack trace on null pointer dereference instead of silently restarting. Useful for pinpointing crash sites in homebrew."
+value="0"/>
+<toggle_switch id="proc_list_enable" title="Process list viewer"
+description="Enables the running process list in the PhantomHEN overlay. Shows PID, name, memory map base, and load address for all active processes."
+value="1"/>
+<toggle_switch id="module_list_enable" title="Module list viewer"
+description="Lists loaded modules per process with base address and size. This is where module-relative offsets come from."
+value="1"/>
+<toggle_switch id="syscall_trace" title="Syscall tracer"
+description="Logs syscall number, arguments, and return value per process. Very noisy — enable for one title at a time."
+value="0"/>
+<toggle_switch id="kernel_heap_debug" title="Kernel heap debug"
+description="Enables kernel allocator tracking and leak detection. Outputs heap stats to the kernel log on demand."
+value="0"/>
+<list id="log_level" title="Kernel log verbosity"
+description="Controls how much detail is written to the kernel log stream.">
+<list_item id="log_error" title="Errors only" value="0"/>
+<list_item id="log_warn" title="Warnings" value="1"/>
+<list_item id="log_info" title="Info (default)" value="2"/>
+<list_item id="log_verbose" title="Verbose" value="3"/>
+<list_item id="log_all" title="All (spam)" value="4"/>
+</list>
+<list id="log_destination" title="Log destination"
+description="Where log output is sent. File survives a crash; network does not.">
+<list_item id="logdst_net" title="Network (klog)" value="0"/>
+<list_item id="logdst_uart" title="UART serial" value="1"/>
+<list_item id="logdst_file" title="File on HDD" value="2"/>
+<list_item id="logdst_screen" title="On-screen" value="3"/>
+</list>
+<text_input id="log_file_path" title="Log file path"
+description="Target file when log destination is set to File."
+value="/data/hen/logs/kernel.log"
+max_length="64"/>
+<text_input id="rpc_auth_token" title="RPC auth token"
+description="Shared secret PC-side tools must present before the RPC server accepts commands. Blank means no authentication."
+value=""
+max_length="32"/>
+<link id="kernel_dump_link" title="Kernel Dumper"
+description="Dumps the running kernel to /data/hen/dumps/. Use this to derive offsets instead of hardcoding values from someone else's build."
+file="HEN/data/KernelDump.xml"/>
+<link id="proc_dump_link" title="Process Dumper"
+description="Dumps a selected process's main module and memory map. Feed the output into your PC-side offset tooling."
+file="HEN/data/ProcDump.xml"/>
+<link id="self_decrypt_link" title="SELF / ELF Decrypter"
+description="Decrypts a signed executable to a plain ELF for static analysis."
+file="HEN/data/SelfDecrypt.xml"/>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+PLUGIN SYSTEM
+═══════════════════════════════════════════════ -->
+<setting_list id="plugin_system" title="★ Plugin System" initial_focus_to="enable_plugins">
+<toggle_switch id="enable_plugins" title="Enable plugin system"
+description="Loads PRX plugins from /data/hen/plugins/ at game launch. Required for FTP, kernel log, and this settings menu."
+value="1"
+confirm="Disable the plugin system? FTP, kernel log, and this settings menu will stop working."
+confirm_phrase="Yes,No"/>
+<text_input id="plugin_dir" title="Plugin directory"
+description="Folder scanned for .prx plugins at launch."
+value="/data/hen/plugins/"
+max_length="64"/>
+<toggle_switch id="upload_prx" title="Write default plugin files to HDD"
+description="Copies HEN's built-in plugin PRX files to /data/hen/plugins/. Run once on first setup."
+value="0"/>
+<text_input id="plugin_load_delay" title="Plugin load delay (ms)"
+description="Wait after process start before injecting. Raise this if plugins crash on launch — injecting too early is the usual cause."
+value="500"
+max_length="5"/>
+<toggle_switch id="plugin_crash_recovery" title="Plugin crash recovery"
+description="If a plugin crashes during injection, the game continues loading without it instead of hard-crashing. The failed plugin is logged to the kernel log."
+value="1"/>
+<toggle_switch id="plugin_verbose_log" title="Verbose plugin log"
+description="Logs each plugin's load address, init result, and timing. First thing to turn on when a plugin silently does nothing."
+value="0"/>
+<text_input id="plugin_title_blocklist" title="Blocked title IDs"
+description="Comma-separated title IDs that plugins are never injected into. Use this to keep plugins out of specific titles."
+value=""
+max_length="64"/>
+<link id="id_plugin_manager" title="Plugin Manager"
+description="Enable or disable plugins installed under /data/hen/plugins/. Plugins load on game launch."
+file="HEN/data/PluginManager.xml"/>
+<link id="plugin_order_link" title="Plugin Load Order"
+description="Reorder plugin injection. Plugins that hook the same function must load in a known order."
+file="HEN/data/PluginOrder.xml"/>
+<link id="plugin_per_title_link" title="Per-Title Plugin Rules"
+description="Choose which plugins load for which title ID instead of injecting everything everywhere."
+file="HEN/data/PluginRules.xml"/>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+PACKAGE INSTALLER
+═══════════════════════════════════════════════ -->
+<setting_list id="pkg_installer" title="★ Package Installer" initial_focus_to="id_game_package_installer_hdd">
+<toggle_switch id="debug_pkg_enable" title="Allow debug-signed PKGs"
+description="Accepts PKGs signed with a debug or fake certificate. Required for self-compiled homebrews and unsigned game ports."
+value="1"/>
+<toggle_switch id="pkg_verify" title="Verify PKG before install"
+description="Checks the package header and content hashes first. Catches a truncated transfer before it wastes an install."
+value="1"/>
+<toggle_switch id="pkg_scan_subdirs" title="Scan subdirectories"
+description="Walks folders under the source path instead of only the top level."
+value="1"/>
+<list id="pkg_install_dest" title="Install destination"
+description="Where packages are installed.">
+<list_item id="pkgdest_int" title="Internal storage" value="0"/>
+<list_item id="pkgdest_ext" title="Extended storage" value="1"/>
+<list_item id="pkgdest_ask" title="Ask each time" value="2"/>
+</list>
+<toggle_switch id="pkg_queue_enable" title="Background install queue"
+description="Queues multiple packages and installs them one after another instead of one at a time by hand."
+value="1"/>
+<toggle_switch id="pkg_delete_after" title="Delete PKG after install"
+description="Removes the source package once the install succeeds. Frees space on the install drive."
+value="0"
+confirm="Delete source packages after install? The original PKG files will be removed."
+confirm_phrase="Yes,No"/>
+<text_input id="pkg_hdd_path" title="Hard disk PKG path"
+description="Folder scanned when installing from the hard disk."
+value="/data/pkg/"
+max_length="64"/>
+<link id="id_game_package_installer_hdd" title="Install from Hard Disk"
+description="Installs PKG files from the path configured above."
+file="PkgInstaller/data/pkginstaller_hdd.xml"/>
+<link id="id_game_package_installer_usb" title="Install from USB Storage"
+description="Installs PKG files from a connected USB drive."
+file="PkgInstaller/data/pkginstaller_usb.xml"/>
+<link id="pkg_installer_net" title="Install from Network"
+description="Installs a package served over HTTP from your own host, with no local copy needed."
+file="PkgInstaller/data/pkginstaller_net.xml"/>
+<text_input id="pkg_net_url" title="Network PKG URL"
+description="Base URL of your package host."
+value="http://192.168.1.10/pkg/"
+max_length="64"/>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+SECURITY
+═══════════════════════════════════════════════ -->
+<setting_list id="security" title="★ Security" initial_focus_to="lan_only_services">
+<toggle_switch id="lan_only_services" title="Restrict services to LAN"
+description="Binds FTP, RPC, klog, and the payload loader to the local subnet only. Leave this on — these services have no authentication by default."
+value="1"/>
+<text_input id="allowed_client_ip" title="Allowed client IP"
+description="Only this IP may connect to the debug services. Blank allows any address on the local subnet."
+value=""
+max_length="15"/>
+<toggle_switch id="services_off_on_psn" title="Kill services when PSN connects"
+description="Shuts down debug services if the console signs in to PSN. Stops a dev service sitting open on a live connection."
+value="1"/>
+<toggle_switch id="auth_required_all" title="Require auth token on all services"
+description="Applies the RPC auth token to FTP and the payload loader as well."
+value="0"/>
+<toggle_switch id="pin_lock_homebrew" title="PIN lock homebrew menu"
+description="Requires a 4-button controller PIN before opening the PhantomHEN settings menu. Set the PIN below."
+value="0"/>
+<text_input id="homebrew_pin" title="Homebrew menu PIN"
+description="4-button PIN to unlock the PhantomHEN settings menu (e.g. Cross, Circle, Square, Triangle = X O □ △)."
+value="XOXO"
+max_length="4"/>
+<toggle_switch id="settings_lock_after_boot" title="Lock settings after boot"
+description="Makes this menu read-only once the payload has applied. Prevents a mis-click changing a patch mid-session."
+value="0"/>
+<toggle_switch id="disable_eject_btn" title="Disable disc eject button"
+description="Disables the physical disc eject button. Prevents accidental ejection during gameplay."
+value="0"/>
+<toggle_switch id="disable_power_btn" title="Disable power button hold-off"
+description="Requires a double-press of the power button to initiate a shutdown. Prevents accidental power-off during long sessions."
+value="0"/>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+APPEARANCE
+═══════════════════════════════════════════════ -->
+<setting_list id="appearance" title="★ Appearance" initial_focus_to="overlay_theme">
+<list id="overlay_theme" title="Overlay theme"
+description="Colour scheme for the PhantomHEN overlay and trainer menu.">
+<list_item id="theme_phantom" title="Phantom (black / red) [default]" value="0"/>
+<list_item id="theme_matrix" title="Matrix (green rain)" value="1"/>
+<list_item id="theme_phantom_matrix" title="Phantom + Matrix (red on green)" value="2"/>
+<list_item id="theme_mono" title="Monochrome" value="3"/>
+<list_item id="theme_amber" title="Amber terminal" value="4"/>
+<list_item id="theme_sony" title="Stock blue" value="5"/>
+</list>
+<list id="overlay_accent" title="Accent colour"
+description="Highlight colour for selected rows, bars, and the watermark.">
+<list_item id="accent_red" title="Phantom red (#C8102E)" value="0"/>
+<list_item id="accent_green" title="Matrix green (#00FF41)" value="1"/>
+<list_item id="accent_white" title="Bone white" value="2"/>
+</list>
+<toggle_switch id="matrix_rain_bg" title="Matrix rain background"
+description="Draws the animated green character rain behind the overlay panel. Costs a few frames on heavy scenes."
+value="1"/>
+<text_input id="matrix_rain_density" title="Matrix rain density (%)"
+description="Column fill rate for the rain effect. Range: 10-100."
+value="60"
+max_length="3"/>
+<text_input id="overlay_opacity" title="Overlay opacity (%)"
+description="Background opacity of the overlay panel. Range: 20-100."
+value="92"
+max_length="3"/>
+<text_input id="overlay_watermark" title="Overlay watermark text"
+description="Short string drawn in the overlay corner. Blank disables it."
+value="PHANTOM"
+max_length="24"/>
+<list id="notification_pos" title="Notification position"
+description="Where PhantomHEN system notifications appear.">
+<list_item id="notif_tl" title="Top left" value="0"/>
+<list_item id="notif_tr" title="Top right" value="1"/>
+<list_item id="notif_bl" title="Bottom left" value="2"/>
+<list_item id="notif_br" title="Bottom right" value="3"/>
+</list>
+<toggle_switch id="custom_splash_enable" title="Custom boot splash"
+description="Replaces the Sony boot logo with a custom image. Place a 1920x1080 PNG at /data/hen/splash.png."
+value="0"/>
+<text_input id="splash_duration_ms" title="Splash duration (ms)"
+description="How long the custom splash stays on screen."
+value="2000"
+max_length="5"/>
+<toggle_switch id="hide_hen_icon" title="Hide PhantomHEN icon on home screen"
+description="Removes the PhantomHEN launcher icon from the home screen. Settings remain accessible via a custom button combo."
+value="0"/>
+<toggle_switch id="notification_sounds" title="Custom notification sounds"
+description="Replaces system notification audio with custom sounds from /data/hen/sounds/."
+value="0"/>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+SYSTEM INFO
+═══════════════════════════════════════════════ -->
+<setting_list id="system_info" title="★ System Info" initial_focus_to="info_display">
+<link id="info_display" title="Console Info"
+description="Displays firmware version, HEN version, console serial, MAC address, CPU/GPU temperature, and storage usage."
+file="HEN/data/SysInfo.xml"/>
+<link id="account_info_display" title="Account IDs"
+description="Shows the account ID of each local user. Copy this into the Save Manager when resigning saves."
+file="HEN/data/AccountInfo.xml"/>
+<link id="storage_health_link" title="Storage Detail"
+description="Per-partition usage plus full S.M.A.R.T. attribute listing for the internal and external drives."
+file="HEN/data/Storage.xml"/>
+<link id="session_stats_link" title="Session Stats"
+description="Uptime, patch apply count, active services, peak temperature, and plugin load results for this boot."
+file="HEN/data/Session.xml"/>
+<toggle_switch id="temp_notification" title="Temperature warning notification"
+description="Shows a system notification when CPU temperature exceeds the threshold set below."
+value="1"/>
+<text_input id="temp_threshold" title="Temperature warning threshold (°C)"
+description="CPU temperature at which the warning notification fires."
+value="80"
+max_length="3"/>
+<toggle_switch id="smart_check" title="HDD S.M.A.R.T. check on boot"
+description="Reads drive health data on boot and notifies if the drive reports any failing attributes."
+value="1"/>
+<button id="btn_info_export" title="[ EXPORT INFO TO USB ]"
+description="Writes a text report of all of the above to the root of a connected USB drive."/>
+</setting_list>
+
+<!-- ═══════════════════════════════════════════════
+DIAGNOSTICS & RECOVERY
+═══════════════════════════════════════════════ -->
+<setting_list id="diagnostics" title="★ Diagnostics &amp; Recovery" initial_focus_to="safe_mode_next_boot">
+<toggle_switch id="safe_mode_next_boot" title="Safe mode on next boot"
+description="Next boot applies the minimum patch set and starts no services. This is the way back in when a setting breaks the shell."
+value="0"/>
+<toggle_switch id="self_test_boot" title="Self-test on boot"
+description="Verifies each patch wrote correctly and each service bound its port, then reports failures."
+value="1"/>
+<toggle_switch id="crash_auto_safe" title="Auto safe mode after crash loop"
+description="If the shell crashes twice in a row during init, the next boot falls back to safe mode automatically."
+value="1"/>
+<link id="crash_log_link" title="Last Crash Log"
+description="Shows the most recent crash: faulting process, address, and the last 50 log lines before the fault."
+file="HEN/data/CrashLog.xml"/>
+<link id="patch_status_link" title="Patch Status"
+description="Lists every patch the payload attempted this boot with its target address and applied/failed result."
+file="HEN/data/PatchStatus.xml"/>
+<button id="btn_panic_restore" title="[ PANIC RESTORE ]"
+description="Reverts every setting to the known-good minimal configuration and restarts the shell."
+confirm="Panic restore? All settings revert to the minimal safe configuration and ShellUI restarts."
+confirm_phrase="Yes,No"/>
+<button id="btn_clear_logs" title="[ CLEAR LOGS &amp; DUMPS ]"
+description="Deletes everything under /data/hen/logs/, /data/hen/dumps/, and /data/hen/coredumps/."
+confirm="Delete all logs, dumps, and coredumps?"
+confirm_phrase="Yes,No"/>
+</setting_list>
+
+<button id="id_restart_shellui" title="Restart ShellUI"
+description="Restarts the system shell. Apply after changing payload options or plugin settings."/>
+<button id="btn_reload_payload" title="Reload Payload"
+description="Re-runs the payload with current settings without a full reboot. Does not re-apply patches that need a cold boot."
+confirm="Reload the payload now? Any running game will be closed."
+confirm_phrase="Yes,No"/>
+<button id="btn_restart_services" title="Restart Services"
+description="Stops and restarts FTP, RPC, klog, and the payload loader. Use after changing a port."/>
+<button id="btn_reboot_console" title="Reboot Console"
+description="Full restart. Required for clock, ASLR, and boot-stage patch changes."
+confirm="Reboot the console now?"
+confirm_phrase="Yes,No"/>
+
+</setting_list>
 </system_settings>

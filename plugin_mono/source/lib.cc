@@ -25,9 +25,9 @@ extern "C"
 #include "hen_settings.inc.c"
 #include "../../common/file.h"
 
-attr_public const char* g_pluginName = "plugin_mono";
-attr_public const char* g_pluginDesc = "Demonstrate usage of CXX in module. Based from OpenOrbis `library_example`";
-attr_public const char* g_pluginAuth = "illusiony";
+attr_public const char* g_pluginName = "PhantomHEN ShellUI";
+attr_public const char* g_pluginDesc = "PhantomHEN settings menu, theming and ShellUI patches. Fork of Scene-Collective/ps4-hen-plugins.";
+attr_public const char* g_pluginAuth = "iDntUseModz (upstream: illusiony)";
 attr_public const char* g_pluginVersion = "Git Commit: " GIT_COMMIT
                                           "\n"
                                           "Git Branch: " GIT_VER

@@ -15,6 +15,7 @@
 #define PRX_MONO_PATH BASE_PATH "/plugin_shellui.prx"
 #define PLUGINS_INI_PATH BASE_PATH "/" "plugins.ini"
 #define PLUGINS_ALL_SECTION "all"
+#define CONFIG_INI_PATH BASE_PATH "/config.ini"
 
 #define SHELLUI_DATA_PATH BASE_PATH "/shellui_data"
 #define SHELLUI_HEN_SETTINGS SHELLUI_DATA_PATH "/hen_settings.xml"
