@@ -21,6 +21,10 @@
 
 #include "../../../common/syscall.h"
 
+// sceKernelUsleep is a PS4 kernel export; declare it explicitly since the
+// OpenOrbis SDK headers may not expose it in this compilation unit.
+extern int sceKernelUsleep(unsigned int microseconds);
+
 #include "../ini.h"
 #include "../shellui_mono.h"
 
@@ -834,7 +838,7 @@ static void NewOnPress(const void* p1, const void* element, const void* p3)
                 // SIGKILL to pid 1 (init) triggers a clean PS4 reboot.
                 // No libSceSystemService needed — orbis_syscall(37) is kill().
                 Notify("", "Rebooting...\n");
-                usleep(500000);
+                sceKernelUsleep(500000);
                 orbis_syscall(37, 1, SIGKILL);
                 break;
             }
