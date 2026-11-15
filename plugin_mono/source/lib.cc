@@ -24,6 +24,8 @@ extern "C"
 #include "hen_settings_icon.inc.c"
 #include "hen_settings.inc.c"
 #include "../../common/file.h"
+#include "../../common/ini.h"
+#include "../../common/path.h"
 
 attr_public const char* g_pluginName = "PhantomHEN ShellUI";
 attr_public const char* g_pluginDesc = "PhantomHEN settings menu, theming and ShellUI patches. Fork of Scene-Collective/ps4-hen-plugins.";
@@ -107,8 +109,171 @@ static int sceKernelGetHwSerialNumber_hook(char* buf)
     return 0;
 }
 
+// Check if a flag file exists (created by settings_menu.c btn_jb_apply)
+static int flag_enabled(const char* name)
+{
+    char path[128];
+    snprintf(path, sizeof(path), BASE_PATH "/flags/%s", name);
+    char buf[4] = {0};
+    if (read_file(path, buf, sizeof(buf) - 1) == 0 && buf[0] == '1')
+        return 1;
+    return 0;
+}
+
+// ini_set_default: write key only if it doesn't already have a value.
+static void ini_set_default(INIFile* ini, const char* section, const char* key, const char* def)
+{
+    if (!ini_get(ini, section, key))
+        ini_set(ini, section, key, def);
+}
+
+// SeedPersistentINI — called once from plugin_load.
+// Creates CONFIG_INI_PATH with all persistent keys at their defaults.
+// Without this, NewOnPreCreate gets an ini_load failure on first boot
+// and toggles never round-trip, so nothing ever persists.
+static void SeedPersistentINI(void)
+{
+    // Touch the file first so ini_load can open it
+    int fd = open(CONFIG_INI_PATH, 2 | 0x200 | 0x800, 0644); // O_WRONLY|O_CREAT|O_TRUNC
+    if (fd >= 0) close(fd);
+
+    INIFile* ini = ini_load(CONFIG_INI_PATH);
+    if (!ini) return;
+
+    // ── jailbreak_mods defaults ────────────────────────────────────────────
+    ini_set_default(ini, "jailbreak_mods", "jb_debug_menu",   "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_dipsw",        "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_qa_flag",      "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_testkit",      "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_devkit",       "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_lan_bypass",   "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_dns_block",    "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_p2p",          "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_region_free",  "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_trophy_lock",  "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_patch_skip",   "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_disc_debug",   "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_no_sleep",     "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_fan_max",      "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_fan_silent",   "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_boost",        "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_bc2",          "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_save_resign",  "0");
+    ini_set_default(ini, "jailbreak_mods", "jb_trophy_sync",  "0");
+
+    // ── ui_tweaks defaults ─────────────────────────────────────────────────
+    ini_set_default(ini, "ui_tweaks", "inp_font_size",   "24");
+    ini_set_default(ini, "ui_tweaks", "inp_text_color",  "FFFFFFFF");
+    ini_set_default(ini, "ui_tweaks", "inp_username",    "");
+    ini_set_default(ini, "ui_tweaks", "ui_hide_clock",   "0");
+    ini_set_default(ini, "ui_tweaks", "ui_hide_notif",   "0");
+    ini_set_default(ini, "ui_tweaks", "ui_dark_icons",   "0");
+    ini_set_default(ini, "ui_tweaks", "ui_grid_compact", "0");
+    ini_set_default(ini, "ui_tweaks", "ui_perf_overlay", "0");
+    ini_set_default(ini, "ui_tweaks", "ui_esp_overlay",  "0");
+
+    // ── psn_bypass defaults — default ON (that's why they installed HEN) ──
+    ini_set_default(ini, "psn_bypass", "psn_plus_bypass",   "1");
+    ini_set_default(ini, "psn_bypass", "psn_plus_ui",       "1");
+    ini_set_default(ini, "psn_bypass", "psn_signin_bypass", "1");
+    ini_set_default(ini, "psn_bypass", "psn_offline_mode",  "0");
+    ini_set_default(ini, "psn_bypass", "psn_spoof_idps",    "0");
+    ini_set_default(ini, "psn_bypass", "psn_block_reports", "0");
+
+    ini_save(ini);
+    ini_free(ini);
+}
+
+// ApplyPersistentPatches — called from RunPost (after dlsym is live).
+// Re-applies every kernel-level patch the user enabled so settings
+// survive across reboots — without this nothing sticks.
+static void ApplyPersistentPatches(void)
+{
+    INIFile* ini = ini_load(CONFIG_INI_PATH);
+    if (!ini) return;
+
+    #define PINI_ON(sec, key) ({ const char* _v = ini_get(ini, sec, key); (_v && _v[0] == '1'); })
+
+    // ── PS Plus bypass ─────────────────────────────────────────────────────
+    // Write flag file; plugin_server / kpayload reads it on its next tick.
+    if (PINI_ON("psn_bypass", "psn_plus_bypass"))
+        write_file(BASE_PATH "/flags/ps_plus_bypass", "1", 1);
+    else
+        unlink(BASE_PATH "/flags/ps_plus_bypass");
+
+    // ── PSN sign-in bypass ─────────────────────────────────────────────────
+    if (PINI_ON("psn_bypass", "psn_signin_bypass"))
+        write_file(BASE_PATH "/flags/psn_signin_bypass", "1", 1);
+    else
+        unlink(BASE_PATH "/flags/psn_signin_bypass");
+
+    // ── Auto sleep disable ─────────────────────────────────────────────────
+    if (PINI_ON("jailbreak_mods", "jb_no_sleep"))
+    {
+        typedef int (*sceRegMgrSetInt_t)(unsigned int, int);
+        sceRegMgrSetInt_t fn_reg = NULL;
+        sceKernelDlsym(0x2001, "sceRegMgrSetInt", (void**)&fn_reg);
+        if (fn_reg) fn_reg(0x1B200000, 0);
+    }
+
+    // ── QA flag ───────────────────────────────────────────────────────────
+    if (PINI_ON("jailbreak_mods", "jb_qa_flag"))
+    {
+        typedef int (*sceRegMgrSetInt_t)(unsigned int, int);
+        sceRegMgrSetInt_t fn_reg = NULL;
+        sceKernelDlsym(0x2001, "sceRegMgrSetInt", (void**)&fn_reg);
+        if (fn_reg) fn_reg(0x3C070000, 1);
+    }
+
+    // ── DipSw override ────────────────────────────────────────────────────
+    if (PINI_ON("jailbreak_mods", "jb_dipsw"))
+    {
+        typedef int (*sceRegMgrSetInt_t)(unsigned int, int);
+        sceRegMgrSetInt_t fn_reg = NULL;
+        sceKernelDlsym(0x2001, "sceRegMgrSetInt", (void**)&fn_reg);
+        if (fn_reg)
+        {
+            fn_reg(0x3C040000, 0x7FFFFFFF);
+            fn_reg(0x3C040001, 0x7FFFFFFF);
+        }
+    }
+
+    // ── Fan control ───────────────────────────────────────────────────────
+    {
+        typedef int (*fan_ctl_t)(int);
+        typedef int (*fan_spd_t)(int);
+        fan_ctl_t fn_ctl = NULL;
+        fan_spd_t fn_spd = NULL;
+        sceKernelDlsym(0x2001, "sceKernelSetFanControl", (void**)&fn_ctl);
+        sceKernelDlsym(0x2001, "sceKernelSetFanSpeed",   (void**)&fn_spd);
+        if (fn_ctl && fn_spd)
+        {
+            if (PINI_ON("jailbreak_mods", "jb_fan_max"))
+                { fn_ctl(0); fn_spd(100); }
+            else if (PINI_ON("jailbreak_mods", "jb_fan_silent"))
+                { fn_ctl(0); fn_spd(20); }
+        }
+    }
+
+    // ── Boost mode ────────────────────────────────────────────────────────
+    if (PINI_ON("jailbreak_mods", "jb_boost"))
+    {
+        typedef int (*boost_t)(int);
+        boost_t fn_boost = NULL;
+        sceKernelDlsym(0x2001, "sceKernelSetGpuCu", (void**)&fn_boost);
+        if (fn_boost) fn_boost(1);
+    }
+
+    #undef PINI_ON
+    ini_free(ini);
+}
+
 static void PatchDebugSettings(void)
 {
+    // Only apply if the debug_menu flag is set via Jailbreak Mods settings
+    if (!flag_enabled("debug_menu"))
+        return;
+
     uintptr_t sceKernelGetUtokenStoreModeForRcmgr = 0;
     uintptr_t sceKernelGetDebugMenuModeForRcmgr = 0;
     sceKernelDlsym(0x2001, "sceKernelGetUtokenStoreModeForRcmgr", (void**)&sceKernelGetUtokenStoreModeForRcmgr);
@@ -123,6 +288,31 @@ static void PatchDebugSettings(void)
     {
         sys_proc_rw(pid, sceKernelGetDebugMenuModeForRcmgr, m, sizeof(m), 1);
     }
+}
+
+// Username override — hook sceUserServiceGetUserName to return custom name
+// from /data/hen/username.txt if it exists
+static uintptr_t sceUserServiceGetUserName_original = 0;
+
+static int sceUserServiceGetUserName_hook(int userId, char* name, size_t nameSize)
+{
+    // Try custom name first
+    char custom[64] = {0};
+    if (read_file(BASE_PATH "/username.txt", custom, sizeof(custom) - 1) == 0 && custom[0])
+    {
+        // Strip trailing newlines
+        for (int i = strlen(custom) - 1; i >= 0 && (custom[i] == '\n' || custom[i] == '\r'); i--)
+            custom[i] = '\0';
+        if (custom[0])
+        {
+            strncpy(name, custom, nameSize - 1);
+            name[nameSize - 1] = '\0';
+            return 0;
+        }
+    }
+    // Fall through to original
+    typedef int (*fn_t)(int, char*, size_t);
+    return ((fn_t)sceUserServiceGetUserName_original)(userId, name, nameSize);
 }
 
 static void RunPost(const int app_exe)
@@ -155,6 +345,22 @@ static void RunPost(const int app_exe)
         WriteJump64(sceKernelGetHwSerialNumber, (uintptr_t)sceKernelGetHwSerialNumber_hook);
     }
     UploadDebugSettingsPatch();
+    ApplyPersistentPatches();
+
+    // Username override hook — only if username.txt exists
+    {
+        char tmp[4] = {0};
+        if (read_file(BASE_PATH "/username.txt", tmp, sizeof(tmp) - 1) == 0 && tmp[0])
+        {
+            uintptr_t fn = 0;
+            sceKernelDlsym(0x2001, "sceUserServiceGetUserName", (void**)&fn);
+            if (fn)
+            {
+                sceUserServiceGetUserName_original = fn;
+                WriteJump64(fn, (uintptr_t)sceUserServiceGetUserName_hook);
+            }
+        }
+    }
 }
 
 uiTYPEDEF_FUNCTION_PTR(int, sceKernelLoadStartModuleInternalForMono_original, const char* param_1, void* param_2, void* param_3, void* param_4, void* param_5, void* param_6);
@@ -215,11 +421,14 @@ attr_public int plugin_load(struct SceEntry* args)
 {
     open_console();
     mkdir(BASE_PATH, 0777);
+    mkdir(BASE_PATH "/flags", 0777);
+    mkdir(BASE_PATH "/ui", 0777);
     mkdir(SHELLUI_DATA_PATH, 0777);
     mkdir(SHELLUI_ICONS_PATH, 0777);
     mkdir(USER_PLUGIN_PATH, 0777);
     write_file(SHELLUI_HEN_SETTINGS, data_hen_settings_xml, data_hen_settings_xml_len);
     write_file(SHELLUI_HEN_SETTINGS_ICON_PATH, data_hen_settings_icon_png, data_hen_settings_icon_png_len);
+    SeedPersistentINI();
     printf("====\n\nHello from mono module\n\n====\n");
     if (0 && file_exists_temp(g_pluginName) == 0)
     {
