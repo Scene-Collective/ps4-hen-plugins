@@ -1080,11 +1080,12 @@ static void NewOnPress(const void* p1, const void* element, const void* p3)
                 // Touch a signal file that plugin_server polls for on its main loop.
                 // plugin_server checks /data/hen/restart_services and kills/restarts
                 // FTP, klog, and RPC if present, then deletes it.
+                // Use fopen/fclose — open() syscall not available in OpenOrbis sysroot.
                 static const char signal_path[] = BASE_PATH "/restart_services";
-                int fd = open(signal_path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                if (fd >= 0)
+                FILE* sig = fopen(signal_path, "w");
+                if (sig)
                 {
-                    close(fd);
+                    fclose(sig);
                     Notify("", "Restart signal sent — services restarting.\n");
                 }
                 else
@@ -1095,15 +1096,32 @@ static void NewOnPress(const void* p1, const void* element, const void* p3)
             }
             case SID("btn_reboot_console"):
             {
-                // SIGKILL to pid 1 (init) triggers a clean PS4 reboot.
-                // No libSceSystemService needed — orbis_syscall(37) is kill().
-                Notify("", "\xe2\x98\x85 PhantomHEN by iDntUseModz\nShutting down services...\n");
+                // Clean PS4 warm reboot via sceSystemServiceRequestShutdown.
+                // orbis_syscall(37, 1, SIGKILL) kills init and causes a hard panic /
+                // black screen on PS4 — it does not trigger a clean restart sequence.
+                // SCE_SYSTEM_SERVICE_REQUEST_SHUTDOWN_REBOOT = 2
+                typedef int (*sceSystemServiceRequestShutdown_t)(int type);
+                static sceSystemServiceRequestShutdown_t fn_shutdown = NULL;
+                if (!fn_shutdown)
+                    sceKernelDlsym(0x2001, "sceSystemServiceRequestShutdown", (void**)&fn_shutdown);
+
+                // Notify() auto-prepends PHANTOM_PREFIX — no manual branding needed here.
+                Notify("", "Shutting down services...\n");
                 sceKernelUsleep(1500000);
-                Notify("", "\xe2\x98\x85 PhantomHEN by iDntUseModz\nSaving configuration...\n");
+                Notify("", "Saving configuration...\n");
                 sceKernelUsleep(1500000);
-                Notify("", "\xe2\x98\x85 PhantomHEN by iDntUseModz\nRebooting now. See you on the other side \xF0\x9F\x91\x8B\n");
+                Notify("", "Rebooting now — see you on the other side.\n");
                 sceKernelUsleep(1000000);
-                orbis_syscall(37, 1, SIGKILL);
+
+                if (fn_shutdown)
+                {
+                    fn_shutdown(2); // SCE_SYSTEM_SERVICE_REQUEST_SHUTDOWN_REBOOT
+                }
+                else
+                {
+                    // fallback: proper PS4 reboot syscall (FreeBSD reboot(2), RB_AUTOBOOT=0)
+                    orbis_syscall(0x25, 0);
+                }
                 break;
             }
 
