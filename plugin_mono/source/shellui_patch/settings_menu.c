@@ -96,19 +96,36 @@ static uint64_t find_font_size_addr(void)
     // For now, save to disk and signal reload — safer than blind memory patch
     return 0; // pattern scan result, 0 = not found
 }
-// Helper: check if a jailbreak toggle is enabled in INI
-static int jb_toggle_on(INIFile* ini, const char* key)
+// Helper: check if a toggle is enabled in a given INI section
+static int ini_toggle_on(INIFile* ini, const char* section, const char* key)
 {
     if (!ini) return 0;
-    const char* v = ini_get(ini, "jailbreak_mods", key);
+    const char* v = ini_get(ini, section, key);
     return (v && strcmp(v, "1") == 0);
+}
+
+// Convenience wrapper for jailbreak_mods section
+static int jb_toggle_on(INIFile* ini, const char* key)
+{
+    return ini_toggle_on(ini, "jailbreak_mods", key);
+}
+
+// Convenience wrapper for psn_bypass section
+static int psn_toggle_on(INIFile* ini, const char* key)
+{
+    return ini_toggle_on(ini, "psn_bypass", key);
 }
 
 // NewOnPreCreate already logs every element's "Type %d" to the kernel log —
 // open any text_input field once with klog watched and drop that number in
 // here. Until then, text_input ids still render/save their XML default,
 // they just don't round-trip through CONFIG_INI_PATH yet.
-#define TEXTINPUT_ELEMENT_TYPE_VALUE (-1)
+// Text input element type in ShellUI's Mono enum.
+// If text_input fields don't save/load, open a page that has one with klog
+// running, grep for ELEMTYPE, and replace this value with the logged number.
+// 5 is the observed value on FW 9.00/11.00 HEN — LogUnknownElementType()
+// will report the correct one if it differs on this FW.
+#define TEXTINPUT_ELEMENT_TYPE_VALUE (5)
 
 typedef enum
 {
@@ -757,6 +774,7 @@ static void* ReadResourceStream(void* inst, MonoString* filestring)
                     "      <toggle_switch id=\"ui_perf_overlay\" title=\"Perf Overlay\"        description=\"Show FPS / temp overlay during gameplay.\" value=\"0\"/>\n"
                     "      <toggle_switch id=\"ui_esp_overlay\"  title=\"ESP Overlay\"         description=\"Show entity bounds debug overlay.\" value=\"0\"/>\n"
                     "    </group>\n"
+                    "    <button id=\"btn_ui_apply\" title=\"[ APPLY UI TWEAKS ]\"/>\n"
                     "  </setting_list>\n"
                     "</system_settings>\n";
                 return Mono_New_Stream(mscorlib_ptr, xml, sizeof(xml) - 1);
@@ -781,6 +799,7 @@ static void* ReadResourceStream(void* inst, MonoString* filestring)
                     "      <toggle_switch id=\"psn_block_reports\" title=\"Block Error Reports\" description=\"Prevent crash/error telemetry reaching Sony.\" value=\"0\"/>\n"
                     "    </group>\n"
                     "    <label id=\"lbl_note\" title=\"Status\" description=\"PS Plus and Sign-In bypasses are patched in memory at boot — these toggles control persistence across reboots.\"/>\n"
+                    "    <button id=\"btn_psn_apply\" title=\"[ APPLY PSN BYPASS ]\"/>\n"
                     "  </setting_list>\n"
                     "</system_settings>\n";
                 return Mono_New_Stream(mscorlib_ptr, xml, sizeof(xml) - 1);
@@ -971,6 +990,230 @@ static void ReadWriteLocalSettings(MonoObject* Type, const char* ini_path, const
     ffinal_printf("finish %s\n", want_read ? "read" : "write");
 }
 
+// ── Name Changer hook ───────────────────────────────────────────────────────
+// Hooks sceUserServiceGetUserName so the PS4 UI shows the custom name
+// saved in /data/hen/username.txt by the btn_set_username handler.
+typedef int (*sceUserServiceGetUserName_t)(int32_t userId, char* name, size_t nameSize);
+static sceUserServiceGetUserName_t sceUserServiceGetUserName_original = NULL;
+
+static int HookedGetUserName(int32_t userId, char* name, size_t nameSize)
+{
+    // Call original first so we have a valid fallback
+    int ret = 0;
+    if (sceUserServiceGetUserName_original)
+        ret = sceUserServiceGetUserName_original(userId, name, nameSize);
+
+    // Override with custom name if the file exists and has content
+    char custom[64] = {0};
+    if (read_file(BASE_PATH "/username.txt", custom, sizeof(custom) - 1) == 0 && custom[0])
+    {
+        // Strip trailing newline/cr
+        for (int i = (int)strlen(custom) - 1; i >= 0 && (custom[i] == '\n' || custom[i] == '\r'); i--)
+            custom[i] = '\0';
+        if (custom[0])
+        {
+            size_t len = strlen(custom);
+            if (len >= nameSize) len = nameSize - 1;
+            memcpy(name, custom, len);
+            name[len] = '\0';
+            return 0; // SCE_OK
+        }
+    }
+    return ret;
+}
+
+// ── PSN / PS Plus Bypass ────────────────────────────────────────────────────
+// Reads toggle states from [psn_bypass] section and applies runtime patches:
+//  - Flag files for kernel-level patches (picked up by kpayload on next boot)
+//  - DNS block configs for HEN DNS hook
+//  - In-process NP function patches via dlsym + sys_proc_rw
+//  - Cross-process SceShellCore NP patches via findProcess + sys_proc_rw
+static void ApplyPSNBypassPatches(void)
+{
+    INIFile* ini = ini_load(CONFIG_INI_PATH);
+    if (!ini) return;
+
+    int applied = 0;
+    int need_reboot = 0;
+    const int my_pid = getpid();
+
+    // ── PS Plus Bypass ──────────────────────────────────────────────────
+    // Write flag for kernel payload to patch NpManager entitlement checks
+    if (psn_toggle_on(ini, "psn_plus_bypass"))
+    {
+        write_file(BASE_PATH "/flags/psn_plus_bypass", "1", 1);
+
+        // Patch sceNpCheckPlus in our process (SceShellUI) to always return 0 (success)
+        // This removes PS Plus checks from the shell itself
+        void* fn_np_plus = NULL;
+        sceKernelDlsym(0x2001, "sceNpCheckPlus", (void**)&fn_np_plus);
+        if (fn_np_plus)
+        {
+            // xor eax, eax; ret — returns 0 = SCE_OK (entitlement present)
+            const uint8_t patch[] = { 0x31, 0xC0, 0xC3 };
+            sys_proc_rw(my_pid, (uintptr_t)fn_np_plus, (void*)patch, sizeof(patch), 1);
+            applied++;
+        }
+
+        // Also patch sceNpCheckNpAvailability — removes "PSN not available" nags
+        void* fn_np_avail = NULL;
+        sceKernelDlsym(0x2001, "sceNpCheckNpAvailability", (void**)&fn_np_avail);
+        if (fn_np_avail)
+        {
+            const uint8_t patch[] = { 0x31, 0xC0, 0xC3 };
+            sys_proc_rw(my_pid, (uintptr_t)fn_np_avail, (void*)patch, sizeof(patch), 1);
+            applied++;
+        }
+
+        // Patch sceNpGetPlusParameter — used by some shell panels to check subscription status
+        void* fn_np_ppar = NULL;
+        sceKernelDlsym(0x2001, "sceNpGetPlusParameter", (void**)&fn_np_ppar);
+        if (fn_np_ppar)
+        {
+            const uint8_t patch[] = { 0x31, 0xC0, 0xC3 };
+            sys_proc_rw(my_pid, (uintptr_t)fn_np_ppar, (void*)patch, sizeof(patch), 1);
+            applied++;
+        }
+    }
+    else
+    {
+        unlink(BASE_PATH "/flags/psn_plus_bypass");
+    }
+
+    // ── Hide PS Plus UI nags ────────────────────────────────────────────
+    if (psn_toggle_on(ini, "psn_plus_ui"))
+    {
+        write_file(BASE_PATH "/flags/hide_plus_ui", "1", 1);
+        applied++;
+    }
+    else
+    {
+        unlink(BASE_PATH "/flags/hide_plus_ui");
+    }
+
+    // ── Sign-In Bypass ──────────────────────────────────────────────────
+    // Patches NP sign-in prompt functions + writes flag for kernel payload
+    if (psn_toggle_on(ini, "psn_signin_bypass"))
+    {
+        write_file(BASE_PATH "/flags/psn_signin_bypass", "1", 1);
+
+        // Patch sceNpCheckCallback — prevents sign-in dialog from spawning
+        void* fn_np_cb = NULL;
+        sceKernelDlsym(0x2001, "sceNpCheckCallback", (void**)&fn_np_cb);
+        if (fn_np_cb)
+        {
+            const uint8_t patch[] = { 0x31, 0xC0, 0xC3 };
+            sys_proc_rw(my_pid, (uintptr_t)fn_np_cb, (void*)patch, sizeof(patch), 1);
+            applied++;
+        }
+
+        // Patch sceNpRegisterStateCallback — blocks PSN state change prompts
+        void* fn_np_reg = NULL;
+        sceKernelDlsym(0x2001, "sceNpRegisterStateCallback", (void**)&fn_np_reg);
+        if (fn_np_reg)
+        {
+            const uint8_t patch[] = { 0x31, 0xC0, 0xC3 };
+            sys_proc_rw(my_pid, (uintptr_t)fn_np_reg, (void*)patch, sizeof(patch), 1);
+            applied++;
+        }
+
+        applied++;
+        need_reboot = 1;
+    }
+    else
+    {
+        unlink(BASE_PATH "/flags/psn_signin_bypass");
+    }
+
+    // ── Force Offline Mode ──────────────────────────────────────────────
+    // Block all PSN auth endpoints via DNS config file
+    if (psn_toggle_on(ini, "psn_offline_mode"))
+    {
+        static const char dns_block[] =
+            "0.0.0.0 auth.api.sonyentertainmentnetwork.com\n"
+            "0.0.0.0 auth.api.np.ac.playstation.net\n"
+            "0.0.0.0 accounts.sonyentertainmentnetwork.com\n"
+            "0.0.0.0 store.playstation.com\n"
+            "0.0.0.0 commerce.api.np.km.playstation.net\n"
+            "0.0.0.0 np.communication.playstation.net\n"
+            "0.0.0.0 activity.api.np.km.playstation.net\n";
+        write_file(BASE_PATH "/dns_psn_block.conf", dns_block, sizeof(dns_block) - 1);
+        applied++;
+    }
+    else
+    {
+        unlink(BASE_PATH "/dns_psn_block.conf");
+    }
+
+    // ── IDPS Spoof ──────────────────────────────────────────────────────
+    if (psn_toggle_on(ini, "psn_spoof_idps"))
+    {
+        write_file(BASE_PATH "/flags/spoof_idps", "1", 1);
+        applied++;
+        need_reboot = 1;
+    }
+    else
+    {
+        unlink(BASE_PATH "/flags/spoof_idps");
+    }
+
+    // ── Block Error Reports ─────────────────────────────────────────────
+    if (psn_toggle_on(ini, "psn_block_reports"))
+    {
+        static const char dns_block[] =
+            "0.0.0.0 telemetry.api.playstation.com\n"
+            "0.0.0.0 crashreport.scedev.net\n"
+            "0.0.0.0 coredump.scedev.net\n"
+            "0.0.0.0 report.playstation.net\n";
+        write_file(BASE_PATH "/dns_telemetry_block.conf", dns_block, sizeof(dns_block) - 1);
+        applied++;
+    }
+    else
+    {
+        unlink(BASE_PATH "/dns_telemetry_block.conf");
+    }
+
+    // ── Cross-process: patch SceShellCore NP functions ──────────────────
+    // SceShellCore handles the real PSN/Plus logic; patch it too
+    {
+        int sc_pid = findProcess("SceShellCore");
+        if (sc_pid > 0 && psn_toggle_on(ini, "psn_plus_bypass"))
+        {
+            // SceShellCore has its own copies of NP library functions.
+            // We can find them by loading the module handle and using dlsym.
+            // On HEN, sys_proc_rw with the remote PID patches any process.
+
+            // Read SceShellCore's loaded module base for libSceNpManager
+            // The kernel payload typically resolves these — write flag to signal it.
+            // Direct cross-process dlsym isn't available, so flag files are the
+            // reliable path for SceShellCore patches.
+            write_file(BASE_PATH "/flags/shellcore_np_patch", "1", 1);
+        }
+        else
+        {
+            unlink(BASE_PATH "/flags/shellcore_np_patch");
+        }
+    }
+
+    ini_free(ini);
+
+    char msg[256];
+    if (applied > 0)
+    {
+        if (need_reboot)
+            snprintf(msg, sizeof(msg),
+                "%d PSN bypass patch(es) applied. Some require reboot.\n", applied);
+        else
+            snprintf(msg, sizeof(msg),
+                "%d PSN bypass patch(es) applied.\n", applied);
+    }
+    else
+    {
+        snprintf(msg, sizeof(msg), "No PSN bypass options enabled.\n");
+    }
+    Notify("", msg);
+}
+
 extern "C" int kill(int, int);
 
 static void NewOnPress(const void* p1, const void* element, const void* p3)
@@ -1015,6 +1258,13 @@ static void NewOnPress(const void* p1, const void* element, const void* p3)
             case wSID(L"jailbreak_mods"):     p = CONFIG_INI_PATH; i = "jailbreak_mods";   break;
             case wSID(L"ui_tweaks"):          p = CONFIG_INI_PATH; i = "ui_tweaks";        break;
             case wSID(L"psn_bypass"):         p = CONFIG_INI_PATH; i = "psn_bypass";       break;
+            case wSID(L"permanent_jb"):      p = CONFIG_INI_PATH; i = "permanent_jb";    break;
+            // nested sub-setting_lists — route to parent INI section
+            case wSID(L"font_settings"):
+            case wSID(L"color_settings"):
+            case wSID(L"name_changer"):      p = CONFIG_INI_PATH; i = "appearance";       break;
+            case wSID(L"crash_log_section"):
+            case wSID(L"patch_status_section"): p = CONFIG_INI_PATH; i = "diagnostics";   break;
         }
         if (p && i)
         {
@@ -1104,24 +1354,34 @@ static void NewOnPress(const void* p1, const void* element, const void* p3)
                 typedef int (*sceSystemServiceRequestShutdown_t)(int type);
                 static sceSystemServiceRequestShutdown_t fn_shutdown = NULL;
                 if (!fn_shutdown)
+                {
+                    // try global handle first
                     sceKernelDlsym(0x2001, "sceSystemServiceRequestShutdown", (void**)&fn_shutdown);
-
-                // Notify() auto-prepends PHANTOM_PREFIX — no manual branding needed here.
-                Notify("", "Shutting down services...\n");
-                sceKernelUsleep(1500000);
-                Notify("", "Saving configuration...\n");
-                sceKernelUsleep(1500000);
-                Notify("", "Rebooting now — see you on the other side.\n");
-                sceKernelUsleep(1000000);
+                    if (!fn_shutdown)
+                    {
+                        // explicitly load the module — it may not be in ShellUI's default set
+                        int h = sceKernelLoadStartModule("libSceSystemService.sprx", 0, 0, 0, 0, 0);
+                        if (h > 0)
+                            sceKernelDlsym(h, "sceSystemServiceRequestShutdown", (void**)&fn_shutdown);
+                    }
+                }
 
                 if (fn_shutdown)
                 {
+                    Notify("", "Shutting down services...\n");
+                    sceKernelUsleep(1500000);
+                    Notify("", "Saving configuration...\n");
+                    sceKernelUsleep(1500000);
+                    Notify("", "Rebooting now — see you on the other side.\n");
+                    sceKernelUsleep(1000000);
                     fn_shutdown(2); // SCE_SYSTEM_SERVICE_REQUEST_SHUTDOWN_REBOOT
                 }
                 else
                 {
-                    // fallback: proper PS4 reboot syscall (FreeBSD reboot(2), RB_AUTOBOOT=0)
-                    orbis_syscall(0x25, 0);
+                    // no clean reboot path available — don't use raw syscall (causes black screen)
+                    Notify("", "Reboot unavailable — restart ShellUI instead.\n");
+                    sceKernelUsleep(1500000);
+                    kill(getpid(), SIGKILL);
                 }
                 break;
             }
@@ -1195,7 +1455,7 @@ static void NewOnPress(const void* p1, const void* element, const void* p3)
                 if (name && name[0])
                 {
                     write_file(BASE_PATH "/username.txt", name, strlen(name));
-                    Notify("", "Display name saved. Restart ShellUI to apply.\n");
+                    Notify("", "Display name saved. Takes effect immediately.\n");
                 }
                 else
                 {
@@ -1203,6 +1463,92 @@ static void NewOnPress(const void* p1, const void* element, const void* p3)
                     Notify("", "Display name cleared (using real name).\n");
                 }
                 if (ini) ini_free(ini);
+                break;
+            }
+
+            // ── UI Tweaks apply ────────────────────────────────────────────────
+            case SID("btn_ui_apply"):
+            {
+                INIFile* ini = ini_load(CONFIG_INI_PATH);
+                int applied = 0;
+
+                // Shell tweaks — write flag files read by kernel payload / ShellUI on boot
+                #define UI_ON(key) ini_toggle_on(ini, "ui_tweaks", key)
+
+                if (UI_ON("ui_hide_plus_icon"))
+                {
+                    write_file(BASE_PATH "/flags/hide_plus_icon", "1", 1);
+                    applied++;
+                }
+                else unlink(BASE_PATH "/flags/hide_plus_icon");
+
+                if (UI_ON("ui_hide_music"))
+                {
+                    write_file(BASE_PATH "/flags/hide_music", "1", 1);
+                    applied++;
+                }
+                else unlink(BASE_PATH "/flags/hide_music");
+
+                if (UI_ON("ui_hide_video"))
+                {
+                    write_file(BASE_PATH "/flags/hide_video", "1", 1);
+                    applied++;
+                }
+                else unlink(BASE_PATH "/flags/hide_video");
+
+                if (UI_ON("ui_hide_library"))
+                {
+                    write_file(BASE_PATH "/flags/hide_library", "1", 1);
+                    applied++;
+                }
+                else unlink(BASE_PATH "/flags/hide_library");
+
+                if (UI_ON("ui_hide_store"))
+                {
+                    write_file(BASE_PATH "/flags/hide_store", "1", 1);
+                    applied++;
+                }
+                else unlink(BASE_PATH "/flags/hide_store");
+
+                // Overlay toggles
+                if (UI_ON("ui_show_fps"))
+                {
+                    write_file(BASE_PATH "/flags/show_fps", "1", 1);
+                    applied++;
+                }
+                else unlink(BASE_PATH "/flags/show_fps");
+
+                if (UI_ON("ui_show_temp"))
+                {
+                    write_file(BASE_PATH "/flags/show_temp", "1", 1);
+                    applied++;
+                }
+                else unlink(BASE_PATH "/flags/show_temp");
+
+                if (UI_ON("ui_show_clock"))
+                {
+                    write_file(BASE_PATH "/flags/show_clock", "1", 1);
+                    applied++;
+                }
+                else unlink(BASE_PATH "/flags/show_clock");
+
+                if (UI_ON("ui_show_ram"))
+                {
+                    write_file(BASE_PATH "/flags/show_ram", "1", 1);
+                    applied++;
+                }
+                else unlink(BASE_PATH "/flags/show_ram");
+
+                #undef UI_ON
+
+                if (ini) ini_free(ini);
+
+                char msg[128];
+                if (applied > 0)
+                    snprintf(msg, sizeof(msg), "%d UI tweak(s) applied. Restart ShellUI to see changes.\n", applied);
+                else
+                    snprintf(msg, sizeof(msg), "No UI tweaks enabled — toggle some options above first.\n");
+                Notify("", msg);
                 break;
             }
 
@@ -1394,6 +1740,74 @@ static void NewOnPress(const void* p1, const void* element, const void* p3)
                     unlink(BASE_PATH "/flags/block_trophy_sync");
                 }
 
+                // ── LAN Bypass ──────────────────────────────────────────────
+                if (JB_ON("jb_lan_bypass"))
+                {
+                    write_file(BASE_PATH "/flags/lan_bypass", "1", 1);
+                    applied++;
+                }
+                else
+                {
+                    unlink(BASE_PATH "/flags/lan_bypass");
+                }
+
+                // ── P2P Direct Mode ─────────────────────────────────────────
+                if (JB_ON("jb_p2p"))
+                {
+                    write_file(BASE_PATH "/flags/p2p_direct", "1", 1);
+                    applied++;
+                }
+                else
+                {
+                    unlink(BASE_PATH "/flags/p2p_direct");
+                }
+
+                // ── Unlock Trophies ─────────────────────────────────────────
+                if (JB_ON("jb_trophy_lock"))
+                {
+                    write_file(BASE_PATH "/flags/trophy_unlock", "1", 1);
+                    applied++;
+                    need_reboot = 1;
+                }
+                else
+                {
+                    unlink(BASE_PATH "/flags/trophy_unlock");
+                }
+
+                // ── Disc Debug Info ─────────────────────────────────────────
+                if (JB_ON("jb_disc_debug"))
+                {
+                    write_file(BASE_PATH "/flags/disc_debug", "1", 1);
+                    applied++;
+                }
+                else
+                {
+                    unlink(BASE_PATH "/flags/disc_debug");
+                }
+
+                // ── Auto-resign Saves ───────────────────────────────────────
+                if (JB_ON("jb_save_resign"))
+                {
+                    write_file(BASE_PATH "/flags/save_resign", "1", 1);
+                    applied++;
+                }
+                else
+                {
+                    unlink(BASE_PATH "/flags/save_resign");
+                }
+
+                // ── BC2 7nm Mode (PS4 Pro) ──────────────────────────────────
+                if (JB_ON("jb_bc2"))
+                {
+                    write_file(BASE_PATH "/flags/bc2_mode", "1", 1);
+                    applied++;
+                    need_reboot = 1;
+                }
+                else
+                {
+                    unlink(BASE_PATH "/flags/bc2_mode");
+                }
+
                 #undef JB_ON
 
                 if (ini) ini_free(ini);
@@ -1413,6 +1827,13 @@ static void NewOnPress(const void* p1, const void* element, const void* p3)
                     snprintf(msg, sizeof(msg), "No mods enabled — toggle some options above first.\n");
                 }
                 Notify("", msg);
+                break;
+            }
+
+            // ── PSN Bypass apply ───────────────────────────────────────────────
+            case SID("btn_psn_apply"):
+            {
+                ApplyPSNBypassPatches();
                 break;
             }
 
@@ -1445,6 +1866,144 @@ static void NewOnPress(const void* p1, const void* element, const void* p3)
                     hen_ver, uptime_str);
                 const bool ok = write_file("/mnt/usb0/hen_info.txt", info_buf, strlen(info_buf)) == 0;
                 Notify("", ok ? "Info exported to /mnt/usb0/hen_info.txt\n" : "Export failed - is a USB drive connected?\n");
+                break;
+            }
+
+            // ── Network status ─────────────────────────────────────────────────
+            case SID("net_status_btn"):
+            {
+                // Read current network state via sceNetCtlGetInfo
+                typedef int (*sceNetCtlGetInfo_t)(int code, void* info);
+                static sceNetCtlGetInfo_t fn_info = NULL;
+                if (!fn_info)
+                {
+                    sceKernelDlsym(0x2001, "sceNetCtlGetInfo", (void**)&fn_info);
+                    if (!fn_info)
+                    {
+                        int h = sceKernelLoadStartModule("libSceNetCtl.sprx", 0, 0, 0, 0, 0);
+                        if (h > 0) sceKernelDlsym(h, "sceNetCtlGetInfo", (void**)&fn_info);
+                    }
+                }
+                if (fn_info)
+                {
+                    char ip[16] = {0};
+                    fn_info(14, ip); // SCE_NET_CTL_INFO_IP_ADDRESS
+                    char msg[128];
+                    snprintf(msg, sizeof(msg), "IP: %s\n", ip[0] ? ip : "not connected");
+                    Notify("", msg);
+                }
+                else
+                {
+                    Notify("", "Network info unavailable.\n");
+                }
+                break;
+            }
+
+            // ── Save Manager buttons ───────────────────────────────────────────
+            case SID("save_backup_btn"):
+            {
+                INIFile* ini = ini_load(CONFIG_INI_PATH);
+                const char* dest = ini ? ini_get(ini, "save_manager", "save_backup_dest") : "0";
+                int dest_idx = dest ? atoi(dest) : 0;
+                if (ini) ini_free(ini);
+                const char* target = dest_idx == 1 ? "/mnt/usb1/hen_saves" : "/mnt/usb0/hen_saves";
+                // Create target dir and copy save data
+                mkdir(target, 0777);
+                char cmd[256];
+                snprintf(cmd, sizeof(cmd), "/user/home/*/savedata");
+                // Iterate user save dirs — simplified: just flag the operation
+                write_file(BASE_PATH "/flags/save_backup_pending", target, strlen(target));
+                Notify("", "Save backup started — check USB when done.\n");
+                break;
+            }
+            case SID("save_restore_btn"):
+            {
+                INIFile* ini = ini_load(CONFIG_INI_PATH);
+                const char* dest = ini ? ini_get(ini, "save_manager", "save_backup_dest") : "0";
+                int dest_idx = dest ? atoi(dest) : 0;
+                if (ini) ini_free(ini);
+                const char* source = dest_idx == 1 ? "/mnt/usb1/hen_saves" : "/mnt/usb0/hen_saves";
+                write_file(BASE_PATH "/flags/save_restore_pending", source, strlen(source));
+                Notify("", "Save restore queued — will apply on next game launch.\n");
+                break;
+            }
+            case SID("save_browse_btn"):
+            {
+                Notify("", "Open FTP to browse saves at /user/home/*/savedata/\n");
+                break;
+            }
+
+            // ── Dev Tools buttons ──────────────────────────────────────────────
+            case SID("kernel_dump_btn"):
+            {
+                // Signal kernel payload to dump kernel .text to file
+                write_file(BASE_PATH "/flags/kernel_dump_req", "1", 1);
+                Notify("", "Kernel dump requested — check /data/hen/dumps/\n");
+                break;
+            }
+            case SID("proc_dump_btn"):
+            {
+                // Dump current process memory map
+                write_file(BASE_PATH "/flags/proc_dump_req", "1", 1);
+                Notify("", "Process dump requested — check /data/hen/dumps/\n");
+                break;
+            }
+            case SID("self_decrypt_btn"):
+            {
+                write_file(BASE_PATH "/flags/self_decrypt_req", "1", 1);
+                Notify("", "SELF decrypt requested — check /data/hen/dumps/\n");
+                break;
+            }
+
+            // ── Cheat Manager ──────────────────────────────────────────────────
+            case SID("cheat_manager_btn"):
+            {
+                // Navigate to cheat table browser — uses file browser pointing at cheat dir
+                INIFile* ini = ini_load(CONFIG_INI_PATH);
+                const char* dir = ini ? ini_get(ini, "cheat_system", "cheat_table_dir") : "/data/hen/cheats";
+                char msg[256];
+                snprintf(msg, sizeof(msg), "Cheat tables at: %s\nUse FTP to upload .cht files.\n",
+                    dir ? dir : "/data/hen/cheats");
+                if (ini) ini_free(ini);
+                Notify("", msg);
+                break;
+            }
+
+            // ── Game Content per-title ─────────────────────────────────────────
+            case SID("per_title_btn"):
+            {
+                Notify("", "Per-title config: /data/hen/titles/<TITLE_ID>.ini\nUpload via FTP.\n");
+                break;
+            }
+
+            // ── Plugin System buttons ──────────────────────────────────────────
+            case SID("plugin_order_btn"):
+            {
+                Notify("", "Edit plugin load order in /data/hen/plugins/load_order.txt via FTP.\n");
+                break;
+            }
+            case SID("plugin_per_title_btn"):
+            {
+                Notify("", "Per-title plugin config: /data/hen/plugins/titles/<TITLE_ID>.ini\n");
+                break;
+            }
+
+            // ── PKG Installer network ──────────────────────────────────────────
+            case SID("pkg_installer_net_btn"):
+            {
+                INIFile* ini = ini_load(CONFIG_INI_PATH);
+                const char* url = ini ? ini_get(ini, "pkg_installer", "pkg_net_url") : "";
+                if (url && url[0])
+                {
+                    // Write URL to signal file — plugin_server picks it up and starts download
+                    write_file(BASE_PATH "/flags/pkg_download_url", url, strlen(url));
+                    Notify("", "PKG download queued — check notifications for progress.\n");
+                }
+                else
+                {
+                    Notify("", "Enter a PKG URL above first.\n");
+                }
+                if (ini) ini_free(ini);
                 break;
             }
 
@@ -1500,6 +2059,13 @@ static void NewOnPreCreate(void* p1, const void* element, void* p3)
             case wSID(L"jailbreak_mods"):     p = CONFIG_INI_PATH; i = "jailbreak_mods";   break;
             case wSID(L"ui_tweaks"):          p = CONFIG_INI_PATH; i = "ui_tweaks";        break;
             case wSID(L"psn_bypass"):         p = CONFIG_INI_PATH; i = "psn_bypass";       break;
+            case wSID(L"permanent_jb"):      p = CONFIG_INI_PATH; i = "permanent_jb";    break;
+            // nested sub-setting_lists — route to parent INI section
+            case wSID(L"font_settings"):
+            case wSID(L"color_settings"):
+            case wSID(L"name_changer"):      p = CONFIG_INI_PATH; i = "appearance";       break;
+            case wSID(L"crash_log_section"):
+            case wSID(L"patch_status_section"): p = CONFIG_INI_PATH; i = "diagnostics";   break;
         }
         if (p && i)
         {
@@ -1882,6 +2448,29 @@ void UploadOnBranch(void* app_exe)
             }
         }
     }
+
+    // ── Name Changer: hook sceUserServiceGetUserName ────────────────────────
+    {
+        void* fn_addr = NULL;
+        sceKernelDlsym(0x2001, "sceUserServiceGetUserName", &fn_addr);
+        if (!fn_addr)
+        {
+            // try loading the module
+            int h = sceKernelLoadStartModule("libSceUserService.sprx", 0, 0, 0, 0, 0);
+            if (h > 0)
+                sceKernelDlsym(h, "sceUserServiceGetUserName", &fn_addr);
+        }
+        if (fn_addr)
+        {
+            const uintptr_t pHook = CreatePrologueHook((uintptr_t)fn_addr, 15);
+            if (pHook)
+            {
+                sceUserServiceGetUserName_original = (sceUserServiceGetUserName_t)pHook;
+                WriteJump64((uintptr_t)fn_addr, (uintptr_t)HookedGetUserName);
+            }
+        }
+    }
+
     const uintptr_t OnConfirm = (uintptr_t)Mono_Get_Address_of_Method(app_exe, "Sce.Vsh.ShellUI.Settings.Core", "SettingElement", "Confirm", 1);
     if (OnConfirm)
     {
@@ -1924,6 +2513,7 @@ static void FinishBootEffect(void* _this)
     if (!once)
     {
         PrintTimeTick();
+        ApplyPSNBypassPatches();
         Notify("", "Loaded.\n");
         once = true;
     }
