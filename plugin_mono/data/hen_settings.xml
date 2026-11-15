@@ -1014,42 +1014,22 @@ Rules (break them and Settings blank-screens):
 </setting_list>
 
 <!-- ═══════════════════════════════════════════════
-     SYSTEM INFO (FIXED — no external links)
+     SYSTEM INFO (C-generated dynamic sub-pages)
      ═══════════════════════════════════════════════ -->
-<setting_list id="system_info" title="★ System Info" initial_focus_to="console_info_section">
+<setting_list id="system_info" title="★ System Info" initial_focus_to="console_info_link">
 
-  <setting_list id="console_info_section" title="Console Info" initial_focus_to="info_fw_ver">
-    <text_input id="info_fw_ver" title="System Firmware" description="Installed firmware version." value="14.02" max_length="10"/>
-    <text_input id="info_hen_ver" title="PhantomHEN Build" description="Current HEN payload version." value="PhantomHEN v2.0" max_length="24"/>
-    <text_input id="info_jb_status" title="Jailbreak Status" description="Kernel exploit state." value="Active" max_length="10"/>
-    <text_input id="info_kernel_base" title="Kernel Base" description="Resolved kernel text base address." value="(run with verbose boot)" max_length="24"/>
-    <text_input id="info_shellcore_base" title="ShellCore Base" description="SceShellCore load address." value="(run with verbose boot)" max_length="24"/>
-    <text_input id="info_console_type" title="Console Type" description="Hardware model." value="PS4" max_length="16"/>
-    <text_input id="info_serial" title="Serial Number" description="Console serial (from sysctl)." value="(hidden)" max_length="20"/>
-    <text_input id="info_mac" title="MAC Address" description="Network interface MAC." value="(check Network Status)" max_length="17"/>
-  </setting_list>
-
-  <setting_list id="account_info_section" title="Account IDs" initial_focus_to="info_user0_id">
-    <text_input id="info_user0_id" title="User 1 Account ID" description="16-hex-digit account ID for save resigning." value="(sign in to populate)" max_length="20"/>
-    <text_input id="info_user1_id" title="User 2 Account ID" description="Second local user if present." value="" max_length="20"/>
-    <text_input id="info_user2_id" title="User 3 Account ID" value="" max_length="20"/>
-    <text_input id="info_user3_id" title="User 4 Account ID" value="" max_length="20"/>
-  </setting_list>
-
-  <setting_list id="storage_info_section" title="Storage Detail" initial_focus_to="info_int_free">
-    <text_input id="info_int_free" title="Internal: Free Space" description="Available space on the internal drive." value="(check Settings &gt; Storage)" max_length="20"/>
-    <text_input id="info_int_total" title="Internal: Total Size" description="Total internal drive capacity." value="(check Settings &gt; Storage)" max_length="20"/>
-    <text_input id="info_ext_free" title="External: Free Space" description="Available space on extended storage (if connected)." value="N/A" max_length="20"/>
-    <text_input id="info_smart_status" title="S.M.A.R.T. Status" description="Drive health status." value="(enable S.M.A.R.T. check)" max_length="20"/>
-  </setting_list>
-
-  <setting_list id="session_info_section" title="Session Stats" initial_focus_to="info_uptime">
-    <text_input id="info_uptime" title="Session Uptime" description="Time since last boot." value="(runtime value)" max_length="20"/>
-    <text_input id="info_patches_applied" title="Patches Applied" description="Count of successfully applied kernel patches." value="(check patch report)" max_length="10"/>
-    <text_input id="info_services_active" title="Active Services" description="Number of running ModzHEN services." value="(runtime value)" max_length="10"/>
-    <text_input id="info_peak_temp" title="Peak Temperature" description="Highest CPU temp this session." value="(enable temp logging)" max_length="10"/>
-    <text_input id="info_plugins_loaded" title="Plugins Loaded" description="Count of successfully loaded PRX plugins." value="(check plugin log)" max_length="10"/>
-  </setting_list>
+  <link id="console_info_link" title="Console Info"
+    description="Firmware version, HEN build, CPU/SOC temps, uptime."
+    file="HEN/data/SysInfo.xml"/>
+  <link id="account_info_link" title="Account IDs"
+    description="Account IDs for all logged-in users (for save resigning)."
+    file="HEN/data/AccountInfo.xml"/>
+  <link id="storage_info_link" title="Storage Detail"
+    description="Internal, data partition, and external USB disk usage."
+    file="HEN/data/Storage.xml"/>
+  <link id="session_info_link" title="Session Stats"
+    description="Uptime and session statistics."
+    file="HEN/data/Session.xml"/>
 
   <toggle_switch id="temp_notification" title="Temperature warning notification"
     value="1"/>

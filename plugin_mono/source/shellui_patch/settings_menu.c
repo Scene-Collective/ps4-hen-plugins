@@ -828,6 +828,7 @@ uiTYPEDEF_FUNCTION_PTR(void, OnPageActivating_Original, const void* p1, const vo
 uiTYPEDEF_FUNCTION_PTR(void, OnCheckVisible_Original, const void* p1, const void* p2, const void* p3);
 uiTYPEDEF_FUNCTION_PTR(void, OnConfirm_Original, const void* p1, const void* p2);
 uiTYPEDEF_FUNCTION_PTR(void, OnPressed_Original, const void* p1, const void* p2);
+uiTYPEDEF_FUNCTION_PTR(void, OnPageDeactivating_Original, const void* p1, const void* p2, const void* p3);
 
 // Prints each ElementType value that isn't in ShellUIElementType, once per value.
 // Open a page with a text_input on it, then: grep klog for ELEMTYPE.
@@ -1685,6 +1686,7 @@ static void NewOnPageDeactivating(const void* param1, const void* p, const void*
         }
     }
     g_PageID = 0;
+    OnPageDeactivating_Original.ptr(param1, p, args);
 }
 
 uiTYPEDEF_FUNCTION_PTR(void, StartSettingsPage_Original, const void* p1);
@@ -1894,7 +1896,12 @@ void UploadOnBranch(void* app_exe)
     const uintptr_t OnPageDeactivating = (uintptr_t)Mono_Get_Address_of_Method(app_exe, "Sce.Vsh.ShellUI.Settings.Core", "SettingsHandler", "OnPageDeactivating", 2);
     if (OnPageDeactivating && OnPressed_Original.v)
     {
-        WriteJump64(OnPageDeactivating, (uintptr_t)NewOnPageDeactivating);
+        const uintptr_t pHook = CreatePrologueHook(OnPageDeactivating, 15);
+        if (pHook)
+        {
+            OnPageDeactivating_Original.addr = pHook;
+            WriteJump64(OnPageDeactivating, (uintptr_t)NewOnPageDeactivating);
+        }
     }
     const uintptr_t SystemAreaIconPSPlus_LaunchPlugin = (uintptr_t)Mono_Get_Address_of_Method(app_exe, "Sce.Vsh.ShellUI.TopMenu", "SystemAreaIconPSPlus", "LaunchPlugin", 0);
     if (SystemAreaIconPSPlus_LaunchPlugin)
