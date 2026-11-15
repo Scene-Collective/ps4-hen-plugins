@@ -81,19 +81,17 @@ jobs:
         build_command: bash build.sh
 
     - name: Upload plugins
-      if: github.event_name != 'push'
       uses: actions/upload-artifact@main
       with:
-        name: plugins-${{ env.build_tag }}
+        name: plugins
         path: |
           ${{ github.workspace }}/${{ env.zip_glob_path }}/${{ env.zip_glob }}
           ${{ github.workspace }}/LICENSE
 
     - name: Upload HEN with built plugins
-      if: github.event_name != 'push'
       uses: actions/upload-artifact@main
       with:
-        name: hen-plugins-${{ env.build_tag }}
+        name: hen-plugins
         path: ${{ env.hen_path }}/hen.bin
 
     - name: Release

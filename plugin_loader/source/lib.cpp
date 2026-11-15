@@ -102,8 +102,10 @@ static void loadPlugins(SceEntry* args)
                 }
                 key = key->next;
             }
-            section = section->next;
         }
+        // advance unconditionally: a section matching neither `all` nor the
+        // current titleid used to leave this pointer untouched and spin forever
+        section = section->next;
     }
     ini_free(ini);
 }

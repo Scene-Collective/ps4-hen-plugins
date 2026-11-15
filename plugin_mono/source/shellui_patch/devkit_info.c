@@ -118,7 +118,7 @@ static int RegMgrStr(const uint32_t k, char* s, const size_t o)
                 static char text[max_sz] = {0};
                 if (!text[0])
                 {
-                    snprintf(text, o, "PS4 HEN Version: %s", filebuf);
+                    snprintf(text, o, "PhantomHEN %s - iDntUseModz", filebuf);
                 }
                 memcpy(s, text, sizeof(text));
             }
