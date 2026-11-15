@@ -192,23 +192,28 @@ static void ApplyPersistentPatches(void)
     INIFile* ini = ini_load(CONFIG_INI_PATH);
     if (!ini) return;
 
-    #define PINI_ON(sec, key) ({ const char* _v = ini_get(ini, sec, key); (_v && _v[0] == '1'); })
+    // pini_on: read a key from ini; returns true if value is "1"
+    // Written as a lambda so it closes over `ini` without GNU statement exprs.
+    auto pini_on = [&](const char* sec, const char* key) -> bool {
+        const char* _v = ini_get(ini, sec, key);
+        return (_v && _v[0] == '1');
+    };
 
     // ── PS Plus bypass ─────────────────────────────────────────────────────
     // Write flag file; plugin_server / kpayload reads it on its next tick.
-    if (PINI_ON("psn_bypass", "psn_plus_bypass"))
+    if (pini_on("psn_bypass", "psn_plus_bypass"))
         write_file(BASE_PATH "/flags/ps_plus_bypass", "1", 1);
     else
         unlink(BASE_PATH "/flags/ps_plus_bypass");
 
     // ── PSN sign-in bypass ─────────────────────────────────────────────────
-    if (PINI_ON("psn_bypass", "psn_signin_bypass"))
+    if (pini_on("psn_bypass", "psn_signin_bypass"))
         write_file(BASE_PATH "/flags/psn_signin_bypass", "1", 1);
     else
         unlink(BASE_PATH "/flags/psn_signin_bypass");
 
     // ── Auto sleep disable ─────────────────────────────────────────────────
-    if (PINI_ON("jailbreak_mods", "jb_no_sleep"))
+    if (pini_on("jailbreak_mods", "jb_no_sleep"))
     {
         typedef int (*sceRegMgrSetInt_t)(unsigned int, int);
         sceRegMgrSetInt_t fn_reg = NULL;
@@ -217,7 +222,7 @@ static void ApplyPersistentPatches(void)
     }
 
     // ── QA flag ───────────────────────────────────────────────────────────
-    if (PINI_ON("jailbreak_mods", "jb_qa_flag"))
+    if (pini_on("jailbreak_mods", "jb_qa_flag"))
     {
         typedef int (*sceRegMgrSetInt_t)(unsigned int, int);
         sceRegMgrSetInt_t fn_reg = NULL;
@@ -226,7 +231,7 @@ static void ApplyPersistentPatches(void)
     }
 
     // ── DipSw override ────────────────────────────────────────────────────
-    if (PINI_ON("jailbreak_mods", "jb_dipsw"))
+    if (pini_on("jailbreak_mods", "jb_dipsw"))
     {
         typedef int (*sceRegMgrSetInt_t)(unsigned int, int);
         sceRegMgrSetInt_t fn_reg = NULL;
@@ -248,15 +253,15 @@ static void ApplyPersistentPatches(void)
         sceKernelDlsym(0x2001, "sceKernelSetFanSpeed",   (void**)&fn_spd);
         if (fn_ctl && fn_spd)
         {
-            if (PINI_ON("jailbreak_mods", "jb_fan_max"))
+            if (pini_on("jailbreak_mods", "jb_fan_max"))
                 { fn_ctl(0); fn_spd(100); }
-            else if (PINI_ON("jailbreak_mods", "jb_fan_silent"))
+            else if (pini_on("jailbreak_mods", "jb_fan_silent"))
                 { fn_ctl(0); fn_spd(20); }
         }
     }
 
     // ── Boost mode ────────────────────────────────────────────────────────
-    if (PINI_ON("jailbreak_mods", "jb_boost"))
+    if (pini_on("jailbreak_mods", "jb_boost"))
     {
         typedef int (*boost_t)(int);
         boost_t fn_boost = NULL;
@@ -264,7 +269,6 @@ static void ApplyPersistentPatches(void)
         if (fn_boost) fn_boost(1);
     }
 
-    #undef PINI_ON
     ini_free(ini);
 }
 
