@@ -133,9 +133,9 @@ static void ini_set_default(INIFile* ini, const char* section, const char* key, 
 // and toggles never round-trip, so nothing ever persists.
 static void SeedPersistentINI(void)
 {
-    // Touch the file first so ini_load can open it
-    int fd = open(CONFIG_INI_PATH, 2 | 0x200 | 0x800, 0644); // O_WRONLY|O_CREAT|O_TRUNC
-    if (fd >= 0) close(fd);
+    // Touch the file first so ini_load can open it (fopen avoids raw open() syscall)
+    FILE* touch = fopen(CONFIG_INI_PATH, "a");
+    if (touch) fclose(touch);
 
     INIFile* ini = ini_load(CONFIG_INI_PATH);
     if (!ini) return;
