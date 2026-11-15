@@ -1,5 +1,3 @@
-extern "C"
-{
 #include "settings_menu.h"
 #include "../../../common/file.h"
 #include "../../../common/function_ptr.h"
@@ -25,7 +23,6 @@ extern "C"
 
 #include "../ini.h"
 #include "../shellui_mono.h"
-}
 
 // FILL: real Sce.Vsh.ShellUI.Settings.Core.ElementType value for TextInput.
 // NewOnPreCreate already logs every element's "Type %d" to the kernel log —
