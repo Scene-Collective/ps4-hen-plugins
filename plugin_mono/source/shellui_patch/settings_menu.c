@@ -837,8 +837,12 @@ static void NewOnPress(const void* p1, const void* element, const void* p3)
             {
                 // SIGKILL to pid 1 (init) triggers a clean PS4 reboot.
                 // No libSceSystemService needed — orbis_syscall(37) is kill().
-                Notify("", "Rebooting...\n");
-                sceKernelUsleep(500000);
+                Notify("", "\xE2\x98\x85 PhantomHEN by iDntUseModz\nShutting down services...\n");
+                sceKernelUsleep(1500000);
+                Notify("", "\xE2\x98\x85 PhantomHEN by iDntUseModz\nSaving configuration...\n");
+                sceKernelUsleep(1500000);
+                Notify("", "\xE2\x98\x85 PhantomHEN by iDntUseModz\nRebooting now. See you on the other side \xF0\x9F\x91\x8B\n");
+                sceKernelUsleep(1000000);
                 orbis_syscall(37, 1, SIGKILL);
                 break;
             }

@@ -778,29 +778,17 @@ SYSTEM INFO
 ═══════════════════════════════════════════════ -->
 <setting_list id="system_info" title="★ System Info" initial_focus_to="info_display">
 <link id="info_display" title="Console Info"
-description="Displays firmware version, HEN version, console serial, MAC address, CPU/GPU temperature, and storage usage."
+description="Firmware version, HEN version, CPU temp, SDK version, and uptime."
 file="HEN/data/SysInfo.xml"/>
 <link id="account_info_display" title="Account IDs"
-description="Shows the account ID of each local user. Copy this into the Save Manager when resigning saves."
+description="Shows the account ID of each local user. Copy into Save Manager when resigning saves."
 file="HEN/data/AccountInfo.xml"/>
 <link id="storage_health_link" title="Storage Detail"
-description="Per-partition usage plus full S.M.A.R.T. attribute listing for the internal and external drives."
+description="Internal and external drive usage."
 file="HEN/data/Storage.xml"/>
 <link id="session_stats_link" title="Session Stats"
-description="Uptime, patch apply count, active services, peak temperature, and plugin load results for this boot."
+description="Uptime, active services, and plugin load results for this boot."
 file="HEN/data/Session.xml"/>
-<toggle_switch id="temp_notification" title="Temperature warning notification"
-description="Shows a system notification when CPU temperature exceeds the threshold set below."
-value="1"/>
-<text_input id="temp_threshold" title="Temperature warning threshold (°C)"
-description="CPU temperature at which the warning notification fires."
-value="80"
-max_length="3"/>
-<toggle_switch id="smart_check" title="HDD S.M.A.R.T. check on boot"
-description="Reads drive health data on boot and notifies if the drive reports any failing attributes."
-value="1"/>
-<button id="btn_info_export" title="[ EXPORT INFO TO USB ]"
-description="Writes a text report of all of the above to the root of a connected USB drive."/>
 </setting_list>
 
 <!-- ═══════════════════════════════════════════════
@@ -816,12 +804,6 @@ value="1"/>
 <toggle_switch id="crash_auto_safe" title="Auto safe mode after crash loop"
 description="If the shell crashes twice in a row during init, the next boot falls back to safe mode automatically."
 value="1"/>
-<link id="crash_log_link" title="Last Crash Log"
-description="Shows the most recent crash: faulting process, address, and the last 50 log lines before the fault."
-file="HEN/data/CrashLog.xml"/>
-<link id="patch_status_link" title="Patch Status"
-description="Lists every patch the payload attempted this boot with its target address and applied/failed result."
-file="HEN/data/PatchStatus.xml"/>
 <button id="btn_panic_restore" title="[ PANIC RESTORE ]"
 description="Reverts every setting to the known-good minimal configuration and restarts the shell."
 confirm="Panic restore? All settings revert to the minimal safe configuration and ShellUI restarts."
@@ -841,9 +823,7 @@ confirm_phrase="Yes,No"/>
 <button id="btn_restart_services" title="Restart Services"
 description="Stops and restarts FTP, RPC, klog, and the payload loader. Use after changing a port."/>
 <button id="btn_reboot_console" title="Reboot Console"
-description="Full restart. Required for clock, ASLR, and boot-stage patch changes."
-confirm="Reboot the console now?"
-confirm_phrase="Yes,No"/>
+description="Full restart. Required for clock, ASLR, and boot-stage patch changes."/>
 
 </setting_list>
 </system_settings>
